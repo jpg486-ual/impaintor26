@@ -31,6 +31,10 @@ public class GameRoom {
     @Column(nullable = false)
     private int maxRounds;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private GameMode gameMode;
+
     @Column(nullable = false, length = 512)
     private String themesCsv;
 
@@ -52,6 +56,12 @@ public class GameRoom {
 
     @Column(nullable = true)
     private Long impostorPlayerId;
+
+    @Column(nullable = true)
+    private Long activeDrawerPlayerId;
+
+    @Column(nullable = false)
+    private int activeDrawerTurnIndex;
 
     @Column(nullable = false)
     private Instant createdAt;
@@ -119,6 +129,14 @@ public class GameRoom {
         this.themesCsv = themesCsv;
     }
 
+    public GameMode getGameMode() {
+        return gameMode;
+    }
+
+    public void setGameMode(GameMode gameMode) {
+        this.gameMode = gameMode;
+    }
+
     public int getCurrentRound() {
         return currentRound;
     }
@@ -165,5 +183,21 @@ public class GameRoom {
 
     public void setImpostorPlayerId(Long impostorPlayerId) {
         this.impostorPlayerId = impostorPlayerId;
+    }
+
+    public Long getActiveDrawerPlayerId() {
+        return activeDrawerPlayerId;
+    }
+
+    public void setActiveDrawerPlayerId(Long activeDrawerPlayerId) {
+        this.activeDrawerPlayerId = activeDrawerPlayerId;
+    }
+
+    public int getActiveDrawerTurnIndex() {
+        return activeDrawerTurnIndex;
+    }
+
+    public void setActiveDrawerTurnIndex(int activeDrawerTurnIndex) {
+        this.activeDrawerTurnIndex = activeDrawerTurnIndex;
     }
 }

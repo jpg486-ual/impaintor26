@@ -15,12 +15,20 @@
           <h3>Crear sala</h3>
 
           <label>
-            Duración de dibujo (segundos)
+            Modo de juego
+            <select [(ngModel)]="selectedGameMode">
+              <option value="SIMULTANEOUS">Simultáneo (6 a la vez)</option>
+              <option value="TURN_BASED">Por turnos (1 dibuja por vez)</option>
+            </select>
+          </label>
+
+          <label>
+            Duración máxima ronda (segundos)
             <input type="number" [(ngModel)]="roundDurationSeconds" min="20" max="300" />
           </label>
 
           <label>
-            Duración de votación (segundos)
+            Duración votación (simultáneo)
             <input type="number" [(ngModel)]="votingDurationSeconds" min="10" max="120" />
           </label>
 
@@ -56,6 +64,7 @@
   @if (state) {
     <section class="status-bar">
       <div><strong>Sala:</strong> {{ state.roomCode }}</div>
+      <div><strong>Modo:</strong> {{ state.gameMode }}</div>
       <div><strong>Ronda:</strong> {{ state.currentRound }}/{{ state.maxRounds }}</div>
       <div><strong>Fase:</strong> {{ state.phase }}</div>
       <div><strong>Tiempo:</strong> {{ secondsLeft }}s</div>
@@ -68,6 +77,10 @@
         } @else {
           <p><strong>Palabra:</strong> {{ state.yourWord }}</p>
         }
+      }
+
+      @if (isTurnBased && state.phase === 'DRAWING') {
+        <p><strong>Turno actual:</strong> {{ activeDrawerName }}</p>
       }
 
       @if (state.phase === 'ROUND_RESULT' || state.phase === 'FINISHED') {
@@ -87,38 +100,48 @@
       <p class="hint">Se necesitan al menos 3 jugadores para iniciar.</p>
     }
 
-    <section class="board-grid">
-      @for (player of gridPlayers; track $index) {
-        <article class="player-slot" [class.empty]="!player">
-          @if (player) {
-            <header>
-              <span>{{ player.name }}</span>
-              <small>{{ player.score }} pts</small>
-            </header>
+    <section class="game-layout">
+      <section class="board-grid">
+        @for (player of gridPlayers; track $index) {
+          <article class="player-slot" [class.empty]="!player">
+            @if (player) {
+              <header>
+                <span>{{ player.name }}</span>
+                <small>{{ player.score }} pts</small>
+              </header>
 
-            <canvas
-              #playerCanvas
-              [attr.data-player-id]="player.id"
-              width="260"
-              height="200"
-              (pointerdown)="onPointerDown($event, player.id)"
-              (pointermove)="onPointerMove($event, player.id)"
-              (pointerup)="onPointerUp($event, player.id)"
-              (pointerleave)="onPointerUp($event, player.id)"
-            ></canvas>
-
-            @if (state.phase === 'VOTING') {
-              <button
-                [disabled]="player.id === state.yourPlayerId || !!state.yourVoteTargetPlayerId"
-                (click)="vote(player.id)">
-                Votar
-              </button>
+              <canvas
+                #playerCanvas
+                [attr.data-player-id]="player.id"
+                width="260"
+                height="200"
+                (pointerdown)="onPointerDown($event, player.id)"
+                (pointermove)="onPointerMove($event, player.id)"
+                (pointerup)="onPointerUp($event, player.id)"
+                (pointerleave)="onPointerUp($event, player.id)"
+              ></canvas>
+            } @else {
+              <div class="placeholder">Esperando jugador...</div>
             }
-          } @else {
-            <div class="placeholder">Esperando jugador...</div>
+          </article>
+        }
+      </section>
+
+      <aside class="side-vote">
+        <h3>Votación</h3>
+        <p class="small">@if (canVoteNow) {Elige impostor} @else {Votación no disponible ahora}</p>
+        <ul>
+          @for (player of state.players; track player.id) {
+            <li>
+              <button
+                [disabled]="!canVoteNow || player.id === state.yourPlayerId"
+                (click)="vote(player.id)">
+                {{ player.name }}
+              </button>
+            </li>
           }
-        </article>
-      }
+        </ul>
+      </aside>
     </section>
 
     <section class="leaderboard">

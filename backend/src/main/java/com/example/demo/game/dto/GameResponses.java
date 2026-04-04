@@ -3,6 +3,7 @@ package com.example.demo.game.dto;
 import java.time.Instant;
 import java.util.List;
 
+import com.example.demo.game.model.GameMode;
 import com.example.demo.game.model.GamePhase;
 
 public final class GameResponses {
@@ -21,6 +22,7 @@ public final class GameResponses {
 
     public record GameStateResponse(
             String roomCode,
+            GameMode gameMode,
             GamePhase phase,
             int currentRound,
             int maxRounds,
@@ -32,6 +34,7 @@ public final class GameResponses {
             boolean youAreImpostor,
             boolean youAreHost,
             Long impostorRevealedPlayerId,
+            Long activeDrawerPlayerId,
             Long majorityVotedPlayerId,
             Long yourVoteTargetPlayerId,
             String resultMessage) {

@@ -2,6 +2,8 @@ package com.example.demo.game.dto;
 
 import java.util.List;
 
+import com.example.demo.game.model.GameMode;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +20,8 @@ public final class GameRequests {
             @Min(20) @Max(300) int roundDurationSeconds,
             @Min(10) @Max(120) int votingDurationSeconds,
             @Min(1) @Max(15) int maxRounds,
-            @NotEmpty List<@NotBlank String> themes) {
+            @NotEmpty List<@NotBlank String> themes,
+            GameMode gameMode) {
     }
 
     public record JoinRoomRequest(

@@ -3,7 +3,7 @@
 }
 
 .app-shell {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 1.2rem;
 }
@@ -43,9 +43,8 @@ label {
   margin-bottom: 0.4rem;
 }
 
-input[type='text'],
-input[type='number'],
-input:not([type]) {
+input,
+select {
   border: 1px solid #bbb;
   border-radius: 6px;
   padding: 0.45rem;
@@ -89,9 +88,15 @@ button:disabled {
   color: #666;
 }
 
+.game-layout {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 1rem;
+}
+
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 0.8rem;
 }
 
@@ -128,6 +133,30 @@ button:disabled {
   color: #777;
 }
 
+.side-vote {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.8rem;
+  background: #fff;
+}
+
+.side-vote ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.side-vote button {
+  width: 100%;
+}
+
+.small {
+  color: #666;
+  font-size: 0.9rem;
+}
+
 .leaderboard {
   margin-top: 1rem;
 }
@@ -140,4 +169,10 @@ button:disabled {
 .error {
   color: #b00020;
   margin-top: 0.8rem;
+}
+
+@media (max-width: 960px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
 }

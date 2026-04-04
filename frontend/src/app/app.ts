@@ -9,6 +9,8 @@ interface RoomJoinResponse {
   host: boolean;
 }
 
+type GameMode = 'SIMULTANEOUS' | 'TURN_BASED';
+
 interface StrokePoint {
   x: number;
   y: number;
@@ -30,6 +32,7 @@ type GamePhase = 'WAITING' | 'DRAWING' | 'VOTING' | 'ROUND_RESULT' | 'FINISHED';
 
 interface GameState {
   roomCode: string;
+  gameMode: GameMode;
   phase: GamePhase;
   currentRound: number;
   maxRounds: number;
@@ -41,6 +44,7 @@ interface GameState {
   youAreImpostor: boolean;
   youAreHost: boolean;
   impostorRevealedPlayerId: number | null;
+  activeDrawerPlayerId: number | null;
   majorityVotedPlayerId: number | null;
   yourVoteTargetPlayerId: number | null;
   resultMessage: string | null;
@@ -73,6 +77,7 @@ export class App implements AfterViewInit, OnDestroy {
 
   username = '';
   roomCodeInput = '';
+  selectedGameMode: GameMode = 'SIMULTANEOUS';
   roundDurationSeconds = 60;
   votingDurationSeconds = 25;
   maxRounds = 5;
@@ -119,6 +124,26 @@ export class App implements AfterViewInit, OnDestroy {
     return this.state.players.find((p) => p.id === this.state!.majorityVotedPlayerId)?.name ?? 'Empate/sin mayoría';
   }
 
+  get activeDrawerName(): string {
+    if (!this.state || this.state.activeDrawerPlayerId == null) {
+      return '—';
+    }
+    return this.state.players.find((p) => p.id === this.state!.activeDrawerPlayerId)?.name ?? '—';
+  }
+
+  get isTurnBased(): boolean {
+    return this.state?.gameMode === 'TURN_BASED';
+  }
+
+  get canVoteNow(): boolean {
+    if (!this.state || this.state.yourVoteTargetPlayerId) {
+      return false;
+    }
+    return this.state.gameMode === 'TURN_BASED'
+      ? this.state.phase === 'DRAWING'
+      : this.state.phase === 'VOTING';
+  }
+
   get gridPlayers(): Array<PlayerView | null> {
     const players = this.state?.players ?? [];
     return [...players, ...Array(Math.max(0, 6 - players.length)).fill(null)];
@@ -159,6 +184,7 @@ export class App implements AfterViewInit, OnDestroy {
       votingDurationSeconds: this.votingDurationSeconds,
       maxRounds: this.maxRounds,
       themes: selectedThemes,
+      gameMode: this.selectedGameMode,
     }).subscribe({
       next: (res) => {
         this.roomCode = res.roomCode;
@@ -203,7 +229,7 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   vote(targetPlayerId: number): void {
-    if (!this.roomCode || !this.playerId || !this.state || this.state.yourVoteTargetPlayerId) {
+    if (!this.roomCode || !this.playerId || !this.canVoteNow) {
       return;
     }
 
@@ -383,9 +409,15 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   private isDrawingEnabledFor(playerId: number): boolean {
-    return !!this.state
-      && this.state.phase === 'DRAWING'
-      && this.playerId === playerId;
+    if (!this.state || this.state.phase !== 'DRAWING' || this.playerId !== playerId) {
+      return false;
+    }
+
+    if (this.state.gameMode === 'TURN_BASED') {
+      return this.state.activeDrawerPlayerId === this.playerId;
+    }
+
+    return true;
   }
 
   private clearAlerts(): void {

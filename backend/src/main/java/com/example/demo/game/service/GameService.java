@@ -3,7 +3,6 @@ package com.example.demo.game.service;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.demo.game.dto.GameRequests;
 import com.example.demo.game.dto.GameResponses;
 import com.example.demo.game.model.DrawingStroke;
+import com.example.demo.game.model.GameMode;
 import com.example.demo.game.model.GamePhase;
 import com.example.demo.game.model.GamePlayer;
 import com.example.demo.game.model.GameRoom;
@@ -76,7 +76,9 @@ public class GameService {
         room.setMaxRounds(request.maxRounds());
         room.setThemesCsv(String.join(",", themes));
         room.setCurrentRound(0);
+        room.setGameMode(request.gameMode() == null ? GameMode.SIMULTANEOUS : request.gameMode());
         room.setPhase(GamePhase.WAITING);
+        room.setActiveDrawerTurnIndex(0);
 
         roomRepository.save(room);
 
@@ -147,8 +149,13 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "No se puede dibujar fuera de la fase de dibujo");
         }
 
-        playerRepository.findByIdAndRoomCode(request.playerId(), roomCode)
+        GamePlayer drawer = playerRepository.findByIdAndRoomCode(request.playerId(), roomCode)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Jugador inválido"));
+
+        if (room.getGameMode() == GameMode.TURN_BASED
+                && !drawer.getId().equals(room.getActiveDrawerPlayerId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No es tu turno de dibujo");
+        }
 
         DrawingStroke stroke = new DrawingStroke();
         stroke.setRoomCode(roomCode);
@@ -156,6 +163,10 @@ public class GameService {
         stroke.setPlayerId(request.playerId());
         stroke.setPathData(encodePoints(request.points()));
         strokeRepository.save(stroke);
+
+        if (room.getGameMode() == GameMode.TURN_BASED) {
+            rotateActiveDrawer(room);
+        }
     }
 
     @Transactional
@@ -163,7 +174,11 @@ public class GameService {
         GameRoom room = getRoomOrThrow(roomCode);
         advanceRoomState(room);
 
-        if (room.getPhase() != GamePhase.VOTING) {
+        boolean validVotingPhase = room.getGameMode() == GameMode.TURN_BASED
+                ? room.getPhase() == GamePhase.DRAWING
+                : room.getPhase() == GamePhase.VOTING;
+
+        if (!validVotingPhase) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ahora no es fase de voto");
         }
 
@@ -235,6 +250,7 @@ public class GameService {
 
         return new GameResponses.GameStateResponse(
                 room.getCode(),
+                room.getGameMode(),
                 room.getPhase(),
                 room.getCurrentRound(),
                 room.getMaxRounds(),
@@ -246,6 +262,7 @@ public class GameService {
                 isImpostor,
                 viewer.getName().equals(room.getHostName()),
                 impostorReveal,
+                room.getActiveDrawerPlayerId(),
                 majority,
                 votedTarget,
                 resultMessage);
@@ -280,9 +297,13 @@ public class GameService {
         }
 
         if (room.getPhase() == GamePhase.DRAWING) {
-            room.setPhase(GamePhase.VOTING);
-            room.setPhaseEndsAt(now.plusSeconds(room.getVotingDurationSeconds()));
-            roomRepository.save(room);
+            if (room.getGameMode() == GameMode.SIMULTANEOUS) {
+                room.setPhase(GamePhase.VOTING);
+                room.setPhaseEndsAt(now.plusSeconds(room.getVotingDurationSeconds()));
+                roomRepository.save(room);
+            } else {
+                resolveVotes(room);
+            }
             return;
         }
 
@@ -313,6 +334,32 @@ public class GameService {
         room.setCurrentWord(pickWord(room.getThemesCsv()));
         room.setPhase(GamePhase.DRAWING);
         room.setPhaseEndsAt(Instant.now().plusSeconds(room.getRoundDurationSeconds()));
+
+        if (room.getGameMode() == GameMode.TURN_BASED) {
+            int startingDrawer = random.nextInt(players.size());
+            room.setActiveDrawerTurnIndex(startingDrawer);
+            room.setActiveDrawerPlayerId(players.get(startingDrawer).getId());
+        } else {
+            room.setActiveDrawerPlayerId(null);
+            room.setActiveDrawerTurnIndex(0);
+        }
+
+        roomRepository.save(room);
+    }
+
+    private void rotateActiveDrawer(GameRoom room) {
+        if (room.getGameMode() != GameMode.TURN_BASED) {
+            return;
+        }
+
+        List<GamePlayer> players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(room.getCode());
+        if (players.isEmpty()) {
+            return;
+        }
+
+        int next = (room.getActiveDrawerTurnIndex() + 1) % players.size();
+        room.setActiveDrawerTurnIndex(next);
+        room.setActiveDrawerPlayerId(players.get(next).getId());
         roomRepository.save(room);
     }
 
@@ -334,6 +381,7 @@ public class GameService {
         playerRepository.saveAll(players);
 
         room.setPhase(GamePhase.ROUND_RESULT);
+        room.setActiveDrawerPlayerId(null);
         room.setPhaseEndsAt(Instant.now().plusSeconds(RESULT_SECONDS));
         roomRepository.save(room);
     }
