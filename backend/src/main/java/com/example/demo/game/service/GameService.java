@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,30 +38,43 @@ public class GameService {
     private static final int IMPOSTOR_WIN_POINTS = 3;
     private static final int CREW_WIN_POINTS = 1;
     private static final int RESULT_SECONDS = 8;
-    private static final int ROOM_TTL_AFTER_FINISH_SECONDS = 30;
+    private static final int ROOM_TTL_AFTER_FINISH_SECONDS = 60;
 
     private static final Map<String, List<String>> WORDS_BY_THEME = Map.of(
-            "animales", List.of("gato", "perro", "elefante", "jirafa", "delfin", "lobo"),
-            "comida", List.of("pizza", "hamburguesa", "sushi", "ensalada", "helado", "taco"),
-            "deportes", List.of("futbol", "tenis", "baloncesto", "natacion", "ciclismo", "boxeo"),
-            "objetos", List.of("reloj", "lampara", "mochila", "tijera", "paraguas", "guitarra"),
-            "profesiones", List.of("medico", "bombero", "profesor", "arquitecto", "piloto", "chef"));
+            "animales",
+            List.of("gato", "perro", "elefante", "jirafa", "delfin", "lobo", "tigre", "serpiente", "aguila",
+                    "tortuga", "rana", "caballo", "ballena", "pinguino", "leon", "mariposa", "pulpo", "conejo"),
+            "comida",
+            List.of("pizza", "hamburguesa", "sushi", "ensalada", "helado", "taco", "pasta", "donut", "sandwich",
+                    "croissant", "paella", "chocolate", "galleta", "burrito", "tortilla", "crepé", "sopa"),
+            "deportes",
+            List.of("futbol", "tenis", "baloncesto", "natacion", "ciclismo", "boxeo", "surf", "esqui", "golf",
+                    "voleibol", "beisbol", "patinaje", "rugby", "esgrima", "kayak"),
+            "objetos",
+            List.of("reloj", "lampara", "mochila", "tijera", "paraguas", "guitarra", "telefono", "camara",
+                    "teclado", "silla", "espejo", "libro", "vela", "candado", "globo", "cuchillo", "llave"),
+            "profesiones",
+            List.of("medico", "bombero", "profesor", "arquitecto", "piloto", "chef", "astronauta", "detective",
+                    "musico", "pintor", "fotografo", "jardinero", "carpintero", "mago", "pirata"));
 
     private final GameRoomRepository roomRepository;
     private final GamePlayerRepository playerRepository;
     private final DrawingStrokeRepository strokeRepository;
     private final GameVoteRepository voteRepository;
+    private final SimpMessagingTemplate messaging;
     private final SecureRandom random = new SecureRandom();
 
     public GameService(
             GameRoomRepository roomRepository,
             GamePlayerRepository playerRepository,
             DrawingStrokeRepository strokeRepository,
-            GameVoteRepository voteRepository) {
+            GameVoteRepository voteRepository,
+            SimpMessagingTemplate messaging) {
         this.roomRepository = roomRepository;
         this.playerRepository = playerRepository;
         this.strokeRepository = strokeRepository;
         this.voteRepository = voteRepository;
+        this.messaging = messaging;
     }
 
     @Transactional
@@ -114,13 +128,21 @@ public class GameService {
         player.setScore(0);
         playerRepository.save(player);
 
-        return new GameResponses.RoomJoinResponse(room.getCode(), player.getId(), normalizedName.equals(room.getHostName()));
+        broadcastState(room.getCode());
+
+        return new GameResponses.RoomJoinResponse(room.getCode(), player.getId(),
+                normalizedName.equals(room.getHostName()));
     }
 
     @Transactional
     public void startGame(String roomCode, GameRequests.StartGameRequest request) {
         GameRoom room = getRoomOrThrow(roomCode);
         validateRoomActive(room);
+
+        // Idempotent: if game already started, just return
+        if (room.getPhase() != GamePhase.WAITING) {
+            return;
+        }
 
         GamePlayer host = playerRepository.findByIdAndRoomCode(request.playerId(), room.getCode())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Jugador inválido"));
@@ -129,21 +151,17 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el creador puede iniciar");
         }
 
-        if (room.getPhase() != GamePhase.WAITING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "La partida ya está iniciada");
-        }
-
         if (playerRepository.countByRoomCode(room.getCode()) < 3) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Se requieren al menos 3 jugadores");
         }
 
         beginRound(room);
+        broadcastState(room.getCode());
     }
 
     @Transactional
     public void addStroke(String roomCode, GameRequests.AddStrokeRequest request) {
         GameRoom room = getRoomOrThrow(roomCode);
-        advanceRoomState(room);
 
         if (room.getPhase() != GamePhase.DRAWING) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "No se puede dibujar fuera de la fase de dibujo");
@@ -167,12 +185,14 @@ public class GameService {
         if (room.getGameMode() == GameMode.TURN_BASED) {
             rotateActiveDrawer(room);
         }
+
+        // Broadcast the new stroke immediately
+        broadcastState(room.getCode());
     }
 
     @Transactional
     public void vote(String roomCode, GameRequests.VoteRequest request) {
         GameRoom room = getRoomOrThrow(roomCode);
-        advanceRoomState(room);
 
         boolean validVotingPhase = room.getGameMode() == GameMode.TURN_BASED
                 ? room.getPhase() == GamePhase.DRAWING
@@ -188,9 +208,10 @@ public class GameService {
         playerRepository.findByIdAndRoomCode(request.targetPlayerId(), roomCode)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Objetivo inválido"));
 
-        if (voteRepository.findByRoomCodeAndRoundNumberAndVoterPlayerId(roomCode, room.getCurrentRound(), request.voterPlayerId())
-                .isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya has votado esta ronda");
+        // Idempotent: if already voted, silently return
+        if (voteRepository.findByRoomCodeAndRoundNumberAndVoterPlayerId(roomCode, room.getCurrentRound(),
+                request.voterPlayerId()).isPresent()) {
+            return;
         }
 
         GameVote vote = new GameVote();
@@ -205,23 +226,85 @@ public class GameService {
         if (votes >= players) {
             resolveVotes(room);
         }
+
+        broadcastState(room.getCode());
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public GameResponses.GameStateResponse getState(String roomCode, long playerId) {
         GameRoom room = getRoomOrThrow(roomCode);
-        advanceRoomState(room);
 
         GamePlayer viewer = playerRepository.findByIdAndRoomCode(playerId, roomCode)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Jugador inválido"));
 
-        List<GamePlayer> players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(roomCode);
+        return buildStateResponse(room, viewer);
+    }
+
+    @Transactional
+    public boolean advanceRoomIfNeeded(String roomCode) {
+        GameRoom room = roomRepository.findByCode(roomCode.toUpperCase(Locale.ROOT)).orElse(null);
+        if (room == null) {
+            return false;
+        }
+        return advanceRoomState(room);
+    }
+
+    @Transactional
+    public void cleanupFinishedRooms() {
+        List<GameRoom> finishedRooms = roomRepository.findAll().stream()
+                .filter(room -> room.getPhase() == GamePhase.FINISHED)
+                .filter(room -> room.getFinishedAt() != null)
+                .filter(room -> room.getFinishedAt()
+                        .isBefore(Instant.now().minusSeconds(ROOM_TTL_AFTER_FINISH_SECONDS)))
+                .toList();
+
+        for (GameRoom room : finishedRooms) {
+            String code = room.getCode();
+            voteRepository.deleteByRoomCode(code);
+            strokeRepository.deleteByRoomCode(code);
+            playerRepository.deleteByRoomCode(code);
+            roomRepository.delete(room);
+        }
+    }
+
+    public void broadcastState(String roomCode) {
+        try {
+            GameRoom room = roomRepository.findByCode(roomCode.toUpperCase(Locale.ROOT)).orElse(null);
+            if (room == null)
+                return;
+
+            List<GamePlayer> players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(roomCode);
+            List<DrawingStroke> strokes = room.getCurrentRound() > 0
+                    ? strokeRepository.findByRoomCodeAndRoundNumberOrderByIdAsc(roomCode, room.getCurrentRound())
+                    : List.of();
+            List<GameVote> votes = room.getCurrentRound() > 0
+                    ? voteRepository.findByRoomCodeAndRoundNumber(roomCode, room.getCurrentRound())
+                    : List.of();
+
+            // Send personalized state to each player
+            for (GamePlayer player : players) {
+                GameResponses.GameStateResponse state = buildStateForPlayer(room, player, players, strokes, votes);
+                messaging.convertAndSend("/topic/room/" + roomCode + "/player/" + player.getId(), state);
+            }
+        } catch (Exception ignored) {
+            // Broadcasting errors should not affect game logic
+        }
+    }
+
+    private GameResponses.GameStateResponse buildStateResponse(GameRoom room, GamePlayer viewer) {
+        List<GamePlayer> players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(room.getCode());
         List<DrawingStroke> strokes = room.getCurrentRound() > 0
-                ? strokeRepository.findByRoomCodeAndRoundNumberOrderByIdAsc(roomCode, room.getCurrentRound())
+                ? strokeRepository.findByRoomCodeAndRoundNumberOrderByIdAsc(room.getCode(), room.getCurrentRound())
                 : List.of();
         List<GameVote> votes = room.getCurrentRound() > 0
-                ? voteRepository.findByRoomCodeAndRoundNumber(roomCode, room.getCurrentRound())
+                ? voteRepository.findByRoomCodeAndRoundNumber(room.getCode(), room.getCurrentRound())
                 : List.of();
+
+        return buildStateForPlayer(room, viewer, players, strokes, votes);
+    }
+
+    private GameResponses.GameStateResponse buildStateForPlayer(GameRoom room, GamePlayer viewer,
+            List<GamePlayer> players, List<DrawingStroke> strokes, List<GameVote> votes) {
 
         Long votedTarget = votes.stream()
                 .filter(v -> Objects.equals(v.getVoterPlayerId(), viewer.getId()))
@@ -237,7 +320,8 @@ public class GameService {
             majority = findMajorityVotedPlayer(votes);
             impostorReveal = room.getImpostorPlayerId();
             boolean crewWins = majority != null && majority.equals(room.getImpostorPlayerId());
-            resultMessage = crewWins ? "La tripulación acertó al impostor." : "El impostor engañó al grupo.";
+            resultMessage = crewWins ? "¡Los pintores acertaron al impostor!"
+                    : "¡El impostor engañó al grupo!";
         }
 
         String yourWord = null;
@@ -248,6 +332,8 @@ public class GameService {
             }
         }
 
+        int totalVotes = (int) votes.stream().map(GameVote::getVoterPlayerId).distinct().count();
+
         return new GameResponses.GameStateResponse(
                 room.getCode(),
                 room.getGameMode(),
@@ -255,8 +341,13 @@ public class GameService {
                 room.getCurrentRound(),
                 room.getMaxRounds(),
                 room.getPhaseEndsAt(),
-                players.stream().map(p -> new GameResponses.PlayerView(p.getId(), p.getName(), p.getScore())).toList(),
-                strokes.stream().map(s -> new GameResponses.StrokeView(s.getId(), s.getPlayerId(), decodePoints(s.getPathData()))).toList(),
+                players.stream()
+                        .map(p -> new GameResponses.PlayerView(p.getId(), p.getName(), p.getScore()))
+                        .toList(),
+                strokes.stream()
+                        .map(s -> new GameResponses.StrokeView(s.getId(), s.getPlayerId(),
+                                decodePoints(s.getPathData())))
+                        .toList(),
                 viewer.getId(),
                 yourWord,
                 isImpostor,
@@ -265,35 +356,19 @@ public class GameService {
                 room.getActiveDrawerPlayerId(),
                 majority,
                 votedTarget,
-                resultMessage);
+                resultMessage,
+                totalVotes,
+                players.size());
     }
 
-    @Transactional
-    public void cleanupFinishedRooms() {
-        List<GameRoom> finishedRooms = roomRepository.findAll().stream()
-                .filter(room -> room.getPhase() == GamePhase.FINISHED)
-                .filter(room -> room.getFinishedAt() != null)
-                .filter(room -> room.getFinishedAt().isBefore(Instant.now().minusSeconds(ROOM_TTL_AFTER_FINISH_SECONDS)))
-                .toList();
-
-        for (GameRoom room : finishedRooms) {
-            String code = room.getCode();
-            voteRepository.deleteByRoomCode(code);
-            strokeRepository.deleteByRoomCode(code);
-            playerRepository.deleteByRoomCode(code);
-            roomRepository.delete(room);
-        }
-    }
-
-    private void advanceRoomState(GameRoom room) {
-        cleanupFinishedRooms();
+    private boolean advanceRoomState(GameRoom room) {
         if (room.getPhaseEndsAt() == null) {
-            return;
+            return false;
         }
 
         Instant now = Instant.now();
         if (room.getPhaseEndsAt().isAfter(now)) {
-            return;
+            return false;
         }
 
         if (room.getPhase() == GamePhase.DRAWING) {
@@ -304,12 +379,12 @@ public class GameService {
             } else {
                 resolveVotes(room);
             }
-            return;
+            return true;
         }
 
         if (room.getPhase() == GamePhase.VOTING) {
             resolveVotes(room);
-            return;
+            return true;
         }
 
         if (room.getPhase() == GamePhase.ROUND_RESULT) {
@@ -321,7 +396,10 @@ public class GameService {
             } else {
                 beginRound(room);
             }
+            return true;
         }
+
+        return false;
     }
 
     private void beginRound(GameRoom room) {
@@ -439,7 +517,8 @@ public class GameService {
     private String normalizeName(String username) {
         String trimmed = username == null ? "" : username.trim();
         if (trimmed.length() < 2 || trimmed.length() > 32) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nombre debe tener entre 2 y 32 caracteres");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El nombre debe tener entre 2 y 32 caracteres");
         }
         return trimmed;
     }
@@ -468,7 +547,8 @@ public class GameService {
         String selectedTheme = themes.get(random.nextInt(themes.size()));
         List<String> words = Optional.ofNullable(WORDS_BY_THEME.get(selectedTheme))
                 .filter(list -> !list.isEmpty())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Tema sin palabras"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Tema sin palabras"));
         return words.get(random.nextInt(words.size()));
     }
 

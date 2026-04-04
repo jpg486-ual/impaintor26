@@ -37,6 +37,8 @@ public final class GameResponses {
             Long activeDrawerPlayerId,
             Long majorityVotedPlayerId,
             Long yourVoteTargetPlayerId,
-            String resultMessage) {
+            String resultMessage,
+            int totalVotesThisRound,
+            int totalPlayers) {
     }
 }

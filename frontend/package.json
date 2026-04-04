@@ -15,7 +15,9 @@
     "@angular/forms": "^21.2.0-next",
     "@angular/platform-browser": "^21.2.0-next",
     "@angular/router": "^21.2.0-next",
+    "@stomp/stompjs": "^7.3.0",
     "rxjs": "~7.8.0",
+    "sockjs-client": "^1.6.1",
     "tslib": "^2.3.0",
     "zone.js": "~0.16.0"
   },
@@ -24,6 +26,7 @@
     "@angular/cli": "^21.2.0-next",
     "@angular/compiler-cli": "^21.2.0-next",
     "@types/node": "^16.11.35",
+    "@types/sockjs-client": "^1.5.4",
     "typescript": "~5.9.2"
   }
 }

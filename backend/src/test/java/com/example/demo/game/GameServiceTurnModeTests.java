@@ -87,4 +87,31 @@ class GameServiceTurnModeTests {
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode().value())
                 .isEqualTo(HttpStatus.CONFLICT.value());
     }
+
+    @Test
+    void vote_isIdempotent_doesNotThrowOnDuplicateVote() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("Host4", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        GameResponses.RoomJoinResponse p2 = gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P42"));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P43"));
+
+        gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+
+        // Vote once
+        gameService.vote(host.roomCode(), new GameRequests.VoteRequest(host.playerId(), p2.playerId()));
+        // Vote again — should NOT throw (idempotent)
+        gameService.vote(host.roomCode(), new GameRequests.VoteRequest(host.playerId(), p2.playerId()));
+    }
+
+    @Test
+    void startGame_isIdempotent_doesNotThrowIfAlreadyStarted() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("Host5", 60, 20, 3, List.of("comida"), GameMode.SIMULTANEOUS));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P52"));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P53"));
+
+        gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+        // Start again — should NOT throw (idempotent)
+        gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+    }
 }

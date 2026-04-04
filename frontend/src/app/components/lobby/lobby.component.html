@@ -1,0 +1,229 @@
+<div class="lobby-container">
+  <!-- Floating particles background -->
+  <div class="particles">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+  </div>
+
+  <!-- Logo -->
+  <header class="logo-section">
+    <h1 class="logo">
+      <span class="logo-imp">IM</span><span class="logo-ai">PAINT</span><span class="logo-ntor">OR</span>
+    </h1>
+    <p class="subtitle">Dibuja · Engaña · Descubre</p>
+  </header>
+
+  <!-- Username -->
+  <div class="username-section glass-card">
+    <label class="field-label" for="username-input">
+      <span class="label-icon">👤</span>
+      Tu nombre
+    </label>
+    <input
+      id="username-input"
+      class="text-input"
+      [(ngModel)]="username"
+      maxlength="32"
+      placeholder="Elige tu nombre..."
+      autocomplete="off"
+    />
+  </div>
+
+  <!-- Tab selector -->
+  <div class="tab-bar">
+    <button
+      id="tab-create"
+      class="tab-btn"
+      [class.active]="activeTab === 'create'"
+      (click)="activeTab = 'create'"
+    >
+      <span class="tab-icon">🎨</span>
+      Crear Sala
+    </button>
+    <button
+      id="tab-join"
+      class="tab-btn"
+      [class.active]="activeTab === 'join'"
+      (click)="activeTab = 'join'"
+    >
+      <span class="tab-icon">🚪</span>
+      Unirse
+    </button>
+  </div>
+
+  <!-- Create Room Panel -->
+  @if (activeTab === 'create') {
+    <section class="panel glass-card animate-slide-up">
+      <!-- Game Mode -->
+      <div class="field-group">
+        <label class="field-label">
+          <span class="label-icon">🎮</span>
+          Modo de juego
+        </label>
+        <div class="mode-selector">
+          <button
+            id="mode-simultaneous"
+            class="mode-btn"
+            [class.active]="selectedGameMode === 'SIMULTANEOUS'"
+            (click)="selectedGameMode = 'SIMULTANEOUS'"
+          >
+            <span class="mode-icon">👥</span>
+            <span class="mode-title">Simultáneo</span>
+            <span class="mode-desc">Todos dibujan a la vez</span>
+          </button>
+          <button
+            id="mode-turnbased"
+            class="mode-btn"
+            [class.active]="selectedGameMode === 'TURN_BASED'"
+            (click)="selectedGameMode = 'TURN_BASED'"
+          >
+            <span class="mode-icon">🔄</span>
+            <span class="mode-title">Por Turnos</span>
+            <span class="mode-desc">Un jugador dibuja cada vez</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Duration sliders -->
+      <div class="sliders-row">
+        <div class="field-group">
+          <label class="field-label" for="round-duration">
+            <span class="label-icon">⏱️</span>
+            Duración ronda
+            <span class="field-value">{{ roundDuration }}s</span>
+          </label>
+          <input
+            id="round-duration"
+            type="range"
+            class="range-input"
+            [(ngModel)]="roundDuration"
+            min="20"
+            max="300"
+            step="5"
+          />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="voting-duration">
+            <span class="label-icon">🗳️</span>
+            Duración votación
+            <span class="field-value">{{ votingDuration }}s</span>
+          </label>
+          <input
+            id="voting-duration"
+            type="range"
+            class="range-input"
+            [(ngModel)]="votingDuration"
+            min="10"
+            max="120"
+            step="5"
+          />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="max-rounds">
+            <span class="label-icon">🔁</span>
+            Rondas
+            <span class="field-value">{{ maxRounds }}</span>
+          </label>
+          <input
+            id="max-rounds"
+            type="range"
+            class="range-input"
+            [(ngModel)]="maxRounds"
+            min="1"
+            max="15"
+            step="1"
+          />
+        </div>
+      </div>
+
+      <!-- Themes -->
+      <div class="field-group">
+        <label class="field-label">
+          <span class="label-icon">📚</span>
+          Temas
+        </label>
+        <div class="theme-grid">
+          @for (theme of game.themes; track theme.key) {
+            <button
+              class="theme-chip"
+              [class.selected]="theme.selected"
+              (click)="toggleTheme(theme)"
+              [attr.id]="'theme-' + theme.key"
+            >
+              <span class="theme-emoji">{{ theme.emoji }}</span>
+              <span>{{ theme.label }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <button
+        id="btn-create-room"
+        class="primary-btn"
+        (click)="createRoom()"
+        [disabled]="game.isLoading()"
+      >
+        @if (game.isLoading()) {
+          <span class="spinner"></span>
+        } @else {
+          <span>🎨</span>
+        }
+        Crear Sala
+      </button>
+    </section>
+  }
+
+  <!-- Join Room Panel -->
+  @if (activeTab === 'join') {
+    <section class="panel glass-card animate-slide-up">
+      <div class="field-group">
+        <label class="field-label" for="room-code-input">
+          <span class="label-icon">🔑</span>
+          Código de sala
+        </label>
+        <input
+          id="room-code-input"
+          class="text-input code-input"
+          [(ngModel)]="roomCodeInput"
+          maxlength="6"
+          placeholder="ABC123"
+          autocomplete="off"
+          (keydown.enter)="joinRoom()"
+          style="text-transform: uppercase; letter-spacing: 0.3em; text-align: center;"
+        />
+      </div>
+
+      <button
+        id="btn-join-room"
+        class="primary-btn join-btn"
+        (click)="joinRoom()"
+        [disabled]="game.isLoading()"
+      >
+        @if (game.isLoading()) {
+          <span class="spinner"></span>
+        } @else {
+          <span>🚪</span>
+        }
+        Unirme
+      </button>
+    </section>
+  }
+
+  <!-- Messages -->
+  @if (game.error()) {
+    <div class="toast toast-error animate-slide-up">
+      <span>⚠️</span> {{ game.error() }}
+    </div>
+  }
+
+  @if (game.message()) {
+    <div class="toast toast-success animate-slide-up">
+      <span>✅</span> {{ game.message() }}
+    </div>
+  }
+</div>

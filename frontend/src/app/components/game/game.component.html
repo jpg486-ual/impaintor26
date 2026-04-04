@@ -1,0 +1,307 @@
+@if (game.state(); as state) {
+  <div class="game-shell">
+
+    <!-- ═══ TOP BAR ═══ -->
+    <header class="top-bar glass-panel">
+      <div class="bar-left">
+        <button id="btn-leave" class="icon-btn" (click)="leaveRoom()" title="Salir de la sala">
+          <span>←</span>
+        </button>
+        <div class="room-badge">
+          <span class="room-label">SALA</span>
+          <span class="room-code">{{ state.roomCode }}</span>
+        </div>
+      </div>
+
+      <div class="bar-center">
+        @if (state.phase === 'WAITING') {
+          <span class="phase-badge waiting">⏳ Esperando jugadores</span>
+        } @else if (state.phase === 'DRAWING') {
+          <span class="phase-badge drawing">🎨 ¡Dibujando!</span>
+        } @else if (state.phase === 'VOTING') {
+          <span class="phase-badge voting">🗳️ Votación</span>
+        } @else if (state.phase === 'ROUND_RESULT') {
+          <span class="phase-badge result">📊 Resultados</span>
+        } @else if (state.phase === 'FINISHED') {
+          <span class="phase-badge finished">🏆 Partida terminada</span>
+        }
+      </div>
+
+      <div class="bar-right">
+        @if (state.phase !== 'WAITING' && state.phase !== 'FINISHED') {
+          <div class="timer" [class.low-time]="isLowTime()">
+            <svg class="timer-ring" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+              <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-dasharray="94.2" [attr.stroke-dashoffset]="94.2 - (94.2 * (game.secondsLeft() % 60) / 60)"
+                stroke-linecap="round" transform="rotate(-90 18 18)"/>
+            </svg>
+            <span class="timer-value">{{ game.secondsLeft() }}</span>
+          </div>
+        }
+        <div class="round-info">
+          <span class="round-label">Ronda</span>
+          <span class="round-value">{{ state.currentRound }}/{{ state.maxRounds }}</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══ WORD / ROLE INFO ═══ -->
+    @if (state.phase === 'DRAWING' || state.phase === 'VOTING') {
+      <div class="word-bar glass-panel">
+        @if (state.youAreImpostor) {
+          <div class="role-info impostor">
+            <span class="role-icon">🕵️</span>
+            <span class="role-text">Eres el <strong>IMPOSTOR</strong> — improvisa sin levantar sospechas</span>
+          </div>
+        } @else {
+          <div class="role-info painter">
+            <span class="role-icon">🎨</span>
+            <span class="role-text">Dibuja: <strong class="word-highlight">{{ state.yourWord }}</strong></span>
+          </div>
+        }
+
+        @if (game.isTurnBased() && state.phase === 'DRAWING') {
+          <div class="turn-info">
+            <span class="turn-label">Turno:</span>
+            <span class="turn-name">{{ game.activeDrawerName() }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ═══ WAITING STATE ═══ -->
+    @if (state.phase === 'WAITING') {
+      <div class="waiting-section">
+        <div class="waiting-card glass-panel">
+          <h2 class="waiting-title">Sala de espera</h2>
+          <div class="player-count">
+            <span class="count-number">{{ state.players.length }}</span>
+            <span class="count-label">/ 6 jugadores</span>
+          </div>
+
+          <div class="waiting-players">
+            @for (player of state.players; track player.id) {
+              <div class="waiting-player">
+                <div class="player-avatar" [style.background]="getPlayerColor(player.id)">
+                  {{ getPlayerInitial(player.name) }}
+                </div>
+                <span class="player-label">{{ player.name }}</span>
+                @if (state.youAreHost && player.name === state.players[0]?.name) {
+                  <span class="host-badge">HOST</span>
+                }
+              </div>
+            }
+
+            @for (i of [].constructor(6 - state.players.length); track $index) {
+              <div class="waiting-player empty">
+                <div class="player-avatar empty-avatar">?</div>
+                <span class="player-label muted">Esperando...</span>
+              </div>
+            }
+          </div>
+
+          @if (game.canStart()) {
+            <button id="btn-start-game" class="start-btn" (click)="startGame()" [disabled]="game.isLoading()">
+              @if (game.isLoading()) {
+                <span class="spinner"></span>
+              }
+              🚀 ¡Comenzar partida!
+            </button>
+          } @else if (state.youAreHost && state.players.length < 3) {
+            <p class="hint-text">Se necesitan al menos 3 jugadores para iniciar</p>
+          } @else if (!state.youAreHost) {
+            <p class="hint-text">Esperando a que el host inicie la partida...</p>
+          }
+
+          <div class="share-code">
+            <span class="share-label">Comparte este código:</span>
+            <span class="share-code-value">{{ state.roomCode }}</span>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══ GAME BOARD ═══ -->
+    @if (state.phase !== 'WAITING') {
+      <div class="game-layout">
+        <!-- Canvas Grid -->
+        <section class="canvas-grid">
+          @for (player of game.gridPlayers(); track trackPlayer($index, player)) {
+            <article
+              class="player-card glass-panel"
+              [class.empty]="!player"
+              [class.current-player]="player && isCurrentPlayer(player.id)"
+              [class.is-drawing]="player && state.phase === 'DRAWING' && isDrawingEnabled(player.id)"
+            >
+              @if (player) {
+                <header class="card-header">
+                  <div class="card-player-info">
+                    <div class="mini-avatar" [style.background]="getPlayerColor(player.id)">
+                      {{ getPlayerInitial(player.name) }}
+                    </div>
+                    <span class="card-player-name">{{ player.name }}</span>
+                    @if (isCurrentPlayer(player.id)) {
+                      <span class="you-badge">TÚ</span>
+                    }
+                  </div>
+                  <span class="card-score">{{ player.score }} pts</span>
+                </header>
+
+                <div class="canvas-wrapper" [style.border-color]="isDrawingEnabled(player.id) ? getPlayerColor(player.id) : 'transparent'">
+                  <app-canvas
+                    [strokes]="getStrokesForPlayer(player.id)"
+                    [drawingEnabled]="isDrawingEnabled(player.id)"
+                    (strokeComplete)="onStrokeComplete($event)"
+                  />
+                </div>
+
+                <!-- Vote button (during voting phase, under each player's canvas) -->
+                @if (game.canVoteNow() && !isCurrentPlayer(player.id)) {
+                  <button
+                    class="vote-btn"
+                    [attr.id]="'vote-' + player.id"
+                    (click)="vote(player.id)"
+                  >
+                    🗳️ Votar como impostor
+                  </button>
+                }
+
+                @if (state.yourVoteTargetPlayerId === player.id) {
+                  <div class="voted-indicator">✓ Tu voto</div>
+                }
+              } @else {
+                <div class="empty-slot">
+                  <span class="empty-icon">👤</span>
+                  <span class="empty-text">Esperando jugador</span>
+                </div>
+              }
+            </article>
+          }
+        </section>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <!-- Voting Status -->
+          @if (state.phase === 'VOTING' || (game.isTurnBased() && state.phase === 'DRAWING')) {
+            <div class="sidebar-card glass-panel">
+              <h3 class="sidebar-title">🗳️ Votación</h3>
+              <div class="vote-progress">
+                <div class="vote-progress-bar">
+                  <div class="vote-progress-fill" [style.width.%]="(state.totalVotesThisRound / state.totalPlayers) * 100"></div>
+                </div>
+                <span class="vote-count">{{ votingProgress() }} votos</span>
+              </div>
+              @if (state.yourVoteTargetPlayerId) {
+                <p class="voted-msg">✅ Ya has votado</p>
+              }
+            </div>
+          }
+
+          <!-- Leaderboard -->
+          <div class="sidebar-card glass-panel">
+            <h3 class="sidebar-title">🏆 Clasificación</h3>
+            <ol class="leaderboard-list">
+              @for (player of game.leaderboard(); track trackLeaderboard($index, player)) {
+                <li class="lb-item" [class.is-you]="isCurrentPlayer(player.id)">
+                  <span class="lb-rank">{{ $index + 1 }}</span>
+                  <div class="lb-avatar" [style.background]="getPlayerColor(player.id)">
+                    {{ getPlayerInitial(player.name) }}
+                  </div>
+                  <span class="lb-name">{{ player.name }}</span>
+                  <span class="lb-score">{{ player.score }}</span>
+                </li>
+              }
+            </ol>
+          </div>
+
+          <!-- Game mode info -->
+          <div class="sidebar-card glass-panel mode-info">
+            <span class="mode-badge">{{ state.gameMode === 'SIMULTANEOUS' ? '👥 Simultáneo' : '🔄 Por turnos' }}</span>
+            <div class="ws-status" [class.connected]="game.wsConnected()">
+              <span class="ws-dot"></span>
+              {{ game.wsConnected() ? 'Conectado' : 'Reconectando...' }}
+            </div>
+          </div>
+        </aside>
+      </div>
+    }
+
+    <!-- ═══ ROLE REVEAL OVERLAY ═══ -->
+    @if (showRoleOverlay && state.phase === 'DRAWING') {
+      <div class="overlay">
+        <div class="overlay-card" [class.impostor-reveal]="state.youAreImpostor">
+          @if (state.youAreImpostor) {
+            <div class="reveal-icon">🕵️</div>
+            <h2 class="reveal-title impostor-title">¡Eres el IMPOSTOR!</h2>
+            <p class="reveal-desc">No tienes palabra. Observa e improvisa sin levantar sospechas.</p>
+          } @else {
+            <div class="reveal-icon">🎨</div>
+            <h2 class="reveal-title painter-title">Tu palabra es:</h2>
+            <p class="reveal-word">{{ state.yourWord }}</p>
+            <p class="reveal-desc">Dibújala para que los demás la reconozcan, ¡pero no hagas que sea demasiado obvio!</p>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- ═══ RESULT OVERLAY ═══ -->
+    @if (showResultOverlay && (state.phase === 'ROUND_RESULT' || state.phase === 'FINISHED')) {
+      <div class="overlay">
+        <div class="overlay-card result-card">
+          @if (state.phase === 'FINISHED') {
+            <div class="reveal-icon">🏆</div>
+            <h2 class="reveal-title">¡Partida terminada!</h2>
+          } @else {
+            <div class="reveal-icon">{{ state.majorityVotedPlayerId === state.impostorRevealedPlayerId ? '🎉' : '😈' }}</div>
+            <h2 class="reveal-title">{{ state.resultMessage }}</h2>
+          }
+
+          <div class="result-details">
+            <div class="result-item">
+              <span class="result-label">Impostor</span>
+              <span class="result-value impostor-name">{{ game.revealedImpostorName() }}</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Votado</span>
+              <span class="result-value">{{ game.majorityVotedName() }}</span>
+            </div>
+          </div>
+
+          @if (state.phase === 'ROUND_RESULT') {
+            <p class="result-hint">Siguiente ronda en breve...</p>
+          }
+
+          @if (state.phase === 'FINISHED') {
+            <div class="final-leaderboard">
+              <h3>Clasificación Final</h3>
+              <ol class="final-lb-list">
+                @for (player of game.leaderboard(); track player.id) {
+                  <li class="final-lb-item">
+                    <span class="final-rank">{{ $index + 1 === 1 ? '🥇' : $index + 1 === 2 ? '🥈' : $index + 1 === 3 ? '🥉' : '#' + ($index + 1) }}</span>
+                    <span class="final-name">{{ player.name }}</span>
+                    <span class="final-score">{{ player.score }} pts</span>
+                  </li>
+                }
+              </ol>
+            </div>
+            <button class="back-btn" (click)="leaveRoom()">🏠 Volver al lobby</button>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- ═══ TOASTS ═══ -->
+    @if (game.error()) {
+      <div class="toast toast-error">⚠️ {{ game.error() }}</div>
+    }
+    @if (game.message()) {
+      <div class="toast toast-success">✅ {{ game.message() }}</div>
+    }
+  </div>
+} @else {
+  <div class="loading-screen">
+    <div class="spinner-lg"></div>
+    <p>Cargando sala...</p>
+  </div>
+}
