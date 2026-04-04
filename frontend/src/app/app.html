@@ -1,0 +1,141 @@
+<div class="app-shell">
+  <h1>Impaintor</h1>
+
+  @if (!roomCode || !playerId) {
+    <section class="lobby">
+      <h2>Crear o unirse a sala</h2>
+
+      <label>
+        Nombre de usuario
+        <input [(ngModel)]="username" maxlength="32" placeholder="Ej. Ana" />
+      </label>
+
+      <div class="split">
+        <article class="card">
+          <h3>Crear sala</h3>
+
+          <label>
+            Duración de dibujo (segundos)
+            <input type="number" [(ngModel)]="roundDurationSeconds" min="20" max="300" />
+          </label>
+
+          <label>
+            Duración de votación (segundos)
+            <input type="number" [(ngModel)]="votingDurationSeconds" min="10" max="120" />
+          </label>
+
+          <label>
+            Número de rondas
+            <input type="number" [(ngModel)]="maxRounds" min="1" max="15" />
+          </label>
+
+          <div>
+            <p>Temas disponibles</p>
+            @for (theme of themes; track theme.key) {
+              <label class="check">
+                <input type="checkbox" [(ngModel)]="theme.selected" /> {{ theme.label }}
+              </label>
+            }
+          </div>
+
+          <button (click)="createRoom()">Crear sala</button>
+        </article>
+
+        <article class="card">
+          <h3>Unirse a sala</h3>
+          <label>
+            Código de sala
+            <input [(ngModel)]="roomCodeInput" maxlength="6" placeholder="ABC123" />
+          </label>
+          <button (click)="joinRoom()">Unirme</button>
+        </article>
+      </div>
+    </section>
+  }
+
+  @if (state) {
+    <section class="status-bar">
+      <div><strong>Sala:</strong> {{ state.roomCode }}</div>
+      <div><strong>Ronda:</strong> {{ state.currentRound }}/{{ state.maxRounds }}</div>
+      <div><strong>Fase:</strong> {{ state.phase }}</div>
+      <div><strong>Tiempo:</strong> {{ secondsLeft }}s</div>
+    </section>
+
+    <section class="role-box">
+      @if (state.phase === 'DRAWING' || state.phase === 'VOTING') {
+        @if (state.youAreImpostor) {
+          <p><strong>Rol:</strong> Eres el impostor. No tienes palabra. Improvisa.</p>
+        } @else {
+          <p><strong>Palabra:</strong> {{ state.yourWord }}</p>
+        }
+      }
+
+      @if (state.phase === 'ROUND_RESULT' || state.phase === 'FINISHED') {
+        <p>{{ state.resultMessage }}</p>
+        <p>
+          Impostor: <strong>{{ revealedImpostorName }}</strong>
+          · Votado: <strong>{{ majorityVotedName }}</strong>
+        </p>
+      }
+    </section>
+
+    @if (canStart) {
+      <button class="start" (click)="startGame()">Iniciar partida</button>
+    }
+
+    @if (state.youAreHost && state.phase === 'WAITING' && state.players.length < 3) {
+      <p class="hint">Se necesitan al menos 3 jugadores para iniciar.</p>
+    }
+
+    <section class="board-grid">
+      @for (player of gridPlayers; track $index) {
+        <article class="player-slot" [class.empty]="!player">
+          @if (player) {
+            <header>
+              <span>{{ player.name }}</span>
+              <small>{{ player.score }} pts</small>
+            </header>
+
+            <canvas
+              #playerCanvas
+              [attr.data-player-id]="player.id"
+              width="260"
+              height="200"
+              (pointerdown)="onPointerDown($event, player.id)"
+              (pointermove)="onPointerMove($event, player.id)"
+              (pointerup)="onPointerUp($event, player.id)"
+              (pointerleave)="onPointerUp($event, player.id)"
+            ></canvas>
+
+            @if (state.phase === 'VOTING') {
+              <button
+                [disabled]="player.id === state.yourPlayerId || !!state.yourVoteTargetPlayerId"
+                (click)="vote(player.id)">
+                Votar
+              </button>
+            }
+          } @else {
+            <div class="placeholder">Esperando jugador...</div>
+          }
+        </article>
+      }
+    </section>
+
+    <section class="leaderboard">
+      <h3>Leaderboard</h3>
+      <ol>
+        @for (player of leaderboard; track player.id) {
+          <li>{{ player.name }} — {{ player.score }} pts</li>
+        }
+      </ol>
+    </section>
+  }
+
+  @if (message) {
+    <p class="ok">{{ message }}</p>
+  }
+
+  @if (error) {
+    <p class="error">{{ error }}</p>
+  }
+</div>
