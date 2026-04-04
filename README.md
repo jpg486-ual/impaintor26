@@ -33,3 +33,20 @@ Juego multijugador tipo "impostor" para hasta 6 jugadores, con dibujo en tiempo 
 ```bash
 docker compose up --build
 ```
+
+### Timers y sincronización
+
+- El backend marca el fin de fase con `phaseEndsAt` (timestamp absoluto).
+- Cada cliente calcula su countdown local usando ese timestamp.
+- El cliente refresca estado periódicamente para re-sincronizar cambios de fase.
+
+### Debug de errores API
+
+- Activar detalle de errores en backend:
+
+```bash
+APP_DEBUG_ERRORS=true docker compose up --build
+```
+
+- Con debug activo, la API incluye tipo/mensaje de excepción en `details`.
+- El frontend muestra esos detalles en la notificación de error y la oculta automáticamente tras unos segundos.

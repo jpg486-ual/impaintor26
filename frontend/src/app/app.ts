@@ -46,6 +46,18 @@ interface GameState {
   resultMessage: string | null;
 }
 
+interface ApiErrorResponse {
+  timestamp: string;
+  status: number;
+  error: string;
+  message: string;
+  path: string;
+  details?: {
+    exceptionType?: string;
+    exceptionMessage?: string;
+  };
+}
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule],
@@ -80,6 +92,8 @@ export class App implements AfterViewInit, OnDestroy {
   secondsLeft = 0;
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
+  private countdownHandle: ReturnType<typeof setInterval> | null = null;
+  private alertHandle: ReturnType<typeof setTimeout> | null = null;
   private currentStroke: StrokePoint[] = [];
   private drawingForPlayerId: number | null = null;
 
@@ -118,18 +132,24 @@ export class App implements AfterViewInit, OnDestroy {
     if (this.pollHandle) {
       clearInterval(this.pollHandle);
     }
+    if (this.countdownHandle) {
+      clearInterval(this.countdownHandle);
+    }
+    if (this.alertHandle) {
+      clearTimeout(this.alertHandle);
+    }
   }
 
   createRoom(): void {
     this.clearAlerts();
     if (!this.username.trim()) {
-      this.error = 'Introduce un nombre de usuario.';
+      this.showError('Introduce un nombre de usuario.');
       return;
     }
 
     const selectedThemes = this.themes.filter((t) => t.selected).map((t) => t.key);
     if (selectedThemes.length === 0) {
-      this.error = 'Selecciona al menos un tema.';
+      this.showError('Selecciona al menos un tema.');
       return;
     }
 
@@ -143,7 +163,7 @@ export class App implements AfterViewInit, OnDestroy {
       next: (res) => {
         this.roomCode = res.roomCode;
         this.playerId = res.playerId;
-        this.message = `Sala ${res.roomCode} creada.`;
+        this.showMessage(`Sala ${res.roomCode} creada.`);
         this.fetchState(true);
       },
       error: (e) => this.handleError(e),
@@ -153,7 +173,7 @@ export class App implements AfterViewInit, OnDestroy {
   joinRoom(): void {
     this.clearAlerts();
     if (!this.username.trim() || !this.roomCodeInput.trim()) {
-      this.error = 'Rellena nombre y código de sala.';
+      this.showError('Rellena nombre y código de sala.');
       return;
     }
 
@@ -164,7 +184,7 @@ export class App implements AfterViewInit, OnDestroy {
       next: (res) => {
         this.roomCode = res.roomCode;
         this.playerId = res.playerId;
-        this.message = `Te uniste a la sala ${res.roomCode}.`;
+        this.showMessage(`Te uniste a la sala ${res.roomCode}.`);
         this.fetchState(true);
       },
       error: (e) => this.handleError(e),
@@ -253,6 +273,7 @@ export class App implements AfterViewInit, OnDestroy {
         this.state = state;
         this.secondsLeft = this.computeSecondsLeft(state.phaseEndsAt);
         this.redrawCanvases();
+        this.startCountdownClock();
 
         if (resetPolling) {
           this.startPolling();
@@ -269,7 +290,17 @@ export class App implements AfterViewInit, OnDestroy {
 
     this.pollHandle = setInterval(() => {
       this.fetchState(false);
-    }, 1000);
+    }, 1500);
+  }
+
+  private startCountdownClock(): void {
+    if (this.countdownHandle) {
+      clearInterval(this.countdownHandle);
+    }
+
+    this.countdownHandle = setInterval(() => {
+      this.secondsLeft = this.computeSecondsLeft(this.state?.phaseEndsAt ?? null);
+    }, 250);
   }
 
   private computeSecondsLeft(phaseEndsAt: string | null): number {
@@ -358,12 +389,38 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   private clearAlerts(): void {
+    if (this.alertHandle) {
+      clearTimeout(this.alertHandle);
+      this.alertHandle = null;
+    }
     this.error = '';
     this.message = '';
   }
 
+  private showMessage(message: string): void {
+    this.clearAlerts();
+    this.message = message;
+    this.alertHandle = setTimeout(() => {
+      this.message = '';
+      this.alertHandle = null;
+    }, 3500);
+  }
+
+  private showError(message: string): void {
+    this.clearAlerts();
+    this.error = message;
+    this.alertHandle = setTimeout(() => {
+      this.error = '';
+      this.alertHandle = null;
+    }, 6500);
+  }
+
   private handleError(error: HttpErrorResponse): void {
-    this.message = '';
-    this.error = error.error?.message ?? 'Error inesperado.';
+    const apiError = error.error as ApiErrorResponse | undefined;
+    const baseMessage = apiError?.message ?? 'Error inesperado.';
+    const debugSuffix = apiError?.details?.exceptionType
+      ? ` [${apiError.details.exceptionType}: ${apiError.details.exceptionMessage ?? ''}]`
+      : '';
+    this.showError(`${baseMessage}${debugSuffix}`);
   }
 }
