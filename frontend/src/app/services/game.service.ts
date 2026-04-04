@@ -1,8 +1,7 @@
-import {Injectable, signal, computed, OnDestroy} from '@angular/core';
+import {Injectable, signal, computed} from '@angular/core';
 import {HttpClient, HttpErrorResponse} from '@angular/common/http';
 import {Router} from '@angular/router';
 import {Client, IMessage} from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 
 /* ── Interfaces ────────────────────────────── */
 export interface RoomJoinResponse {
@@ -163,7 +162,7 @@ export class GameService {
         this.isHost.set(res.host);
         this.isLoading.set(false);
         this.showMessage(`Sala ${res.roomCode} creada`);
-        this.connectWebSocket();
+        void this.connectWebSocket();
         this.startPolling();
         this.router.navigate(['/room', res.roomCode]);
       },
@@ -189,7 +188,7 @@ export class GameService {
         this.isHost.set(res.host);
         this.isLoading.set(false);
         this.showMessage(`Unido a sala ${res.roomCode}`);
-        this.connectWebSocket();
+        void this.connectWebSocket();
         this.startPolling();
         this.router.navigate(['/room', res.roomCode]);
       },
@@ -254,15 +253,22 @@ export class GameService {
   }
 
   /* ── WebSocket ─────────────────────────── */
-  private connectWebSocket(): void {
+  private async connectWebSocket(): Promise<void> {
     const rc = this.roomCode();
     const pid = this.playerId();
     if (!rc || !pid) return;
 
     this.disconnectWebSocket();
 
+    const sockJsModule = await import('sockjs-client').catch(() => null);
+    if (!sockJsModule) {
+      this.showError('No se pudo inicializar el canal en tiempo real.');
+      return;
+    }
+    const SockJSCtor = (sockJsModule as any).default ?? sockJsModule;
+
     this.stompClient = new Client({
-      webSocketFactory: () => new SockJS(this.wsBase) as any,
+      webSocketFactory: () => new SockJSCtor(this.wsBase) as any,
       reconnectDelay: 3000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
