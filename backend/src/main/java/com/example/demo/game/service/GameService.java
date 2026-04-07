@@ -93,6 +93,7 @@ public class GameService {
         room.setGameMode(request.gameMode() == null ? GameMode.SIMULTANEOUS : request.gameMode());
         room.setPhase(GamePhase.WAITING);
         room.setActiveDrawerTurnIndex(0);
+        room.setTurnsCompletedInRound(0);
 
         roomRepository.save(room);
 
@@ -181,10 +182,6 @@ public class GameService {
         stroke.setPlayerId(request.playerId());
         stroke.setPathData(encodePoints(request.points()));
         strokeRepository.save(stroke);
-
-        if (room.getGameMode() == GameMode.TURN_BASED) {
-            rotateActiveDrawer(room);
-        }
 
         // Broadcast the new stroke immediately
         broadcastState(room.getCode());
@@ -377,7 +374,7 @@ public class GameService {
                 room.setPhaseEndsAt(now.plusSeconds(room.getVotingDurationSeconds()));
                 roomRepository.save(room);
             } else {
-                resolveVotes(room);
+                advanceTurnOrResolve(room, now);
             }
             return true;
         }
@@ -412,6 +409,7 @@ public class GameService {
         room.setCurrentWord(pickWord(room.getThemesCsv()));
         room.setPhase(GamePhase.DRAWING);
         room.setPhaseEndsAt(Instant.now().plusSeconds(room.getRoundDurationSeconds()));
+        room.setTurnsCompletedInRound(0);
 
         if (room.getGameMode() == GameMode.TURN_BASED) {
             int startingDrawer = random.nextInt(players.size());
@@ -425,12 +423,27 @@ public class GameService {
         roomRepository.save(room);
     }
 
-    private void rotateActiveDrawer(GameRoom room) {
-        if (room.getGameMode() != GameMode.TURN_BASED) {
+    private void advanceTurnOrResolve(GameRoom room, Instant now) {
+        List<GamePlayer> players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(room.getCode());
+        if (players.isEmpty()) {
+            resolveVotes(room);
             return;
         }
 
-        List<GamePlayer> players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(room.getCode());
+        int completedTurns = room.getTurnsCompletedInRound() + 1;
+        if (completedTurns >= players.size()) {
+            resolveVotes(room);
+            return;
+        }
+
+        room.setTurnsCompletedInRound(completedTurns);
+        rotateActiveDrawer(room, players);
+        room.setPhaseEndsAt(now.plusSeconds(room.getRoundDurationSeconds()));
+        strokeRepository.deleteByRoomCodeAndRoundNumber(room.getCode(), room.getCurrentRound());
+        roomRepository.save(room);
+    }
+
+    private void rotateActiveDrawer(GameRoom room, List<GamePlayer> players) {
         if (players.isEmpty()) {
             return;
         }
@@ -438,7 +451,6 @@ public class GameService {
         int next = (room.getActiveDrawerTurnIndex() + 1) % players.size();
         room.setActiveDrawerTurnIndex(next);
         room.setActiveDrawerPlayerId(players.get(next).getId());
-        roomRepository.save(room);
     }
 
     private void resolveVotes(GameRoom room) {

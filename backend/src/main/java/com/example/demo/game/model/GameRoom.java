@@ -64,6 +64,9 @@ public class GameRoom {
     private int activeDrawerTurnIndex;
 
     @Column(nullable = false)
+    private int turnsCompletedInRound;
+
+    @Column(nullable = false)
     private Instant createdAt;
 
     @Column(nullable = false)
@@ -199,5 +202,13 @@ public class GameRoom {
 
     public void setActiveDrawerTurnIndex(int activeDrawerTurnIndex) {
         this.activeDrawerTurnIndex = activeDrawerTurnIndex;
+    }
+
+    public int getTurnsCompletedInRound() {
+        return turnsCompletedInRound;
+    }
+
+    public void setTurnsCompletedInRound(int turnsCompletedInRound) {
+        this.turnsCompletedInRound = turnsCompletedInRound;
     }
 }

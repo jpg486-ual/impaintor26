@@ -15,6 +15,8 @@ import com.example.demo.game.dto.GameRequests;
 import com.example.demo.game.dto.GameResponses;
 import com.example.demo.game.model.GameMode;
 import com.example.demo.game.model.GamePhase;
+import com.example.demo.game.model.GameRoom;
+import com.example.demo.game.repository.GameRoomRepository;
 import com.example.demo.game.service.GameService;
 
 @SpringBootTest
@@ -22,6 +24,9 @@ class GameServiceTurnModeTests {
 
     @Autowired
     private GameService gameService;
+
+        @Autowired
+        private GameRoomRepository roomRepository;
 
     @Test
     void turnMode_allowsVotingDuringDrawingAndResolvesWhenEveryoneVotes() {
@@ -101,6 +106,55 @@ class GameServiceTurnModeTests {
         gameService.vote(host.roomCode(), new GameRequests.VoteRequest(host.playerId(), p2.playerId()));
         // Vote again — should NOT throw (idempotent)
         gameService.vote(host.roomCode(), new GameRequests.VoteRequest(host.playerId(), p2.playerId()));
+    }
+
+    @Test
+    void turnMode_doesNotRotateDrawerWhenStrokeIsSubmitted() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("Host6", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P62"));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P63"));
+
+        gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+
+        GameResponses.GameStateResponse beforeStroke = gameService.getState(host.roomCode(), host.playerId());
+        long activeDrawer = beforeStroke.activeDrawerPlayerId();
+
+        gameService.addStroke(host.roomCode(), new GameRequests.AddStrokeRequest(
+                activeDrawer,
+                List.of(new GameRequests.StrokePoint(10, 10), new GameRequests.StrokePoint(50, 50))));
+
+        GameResponses.GameStateResponse afterStroke = gameService.getState(host.roomCode(), host.playerId());
+        assertThat(afterStroke.activeDrawerPlayerId()).isEqualTo(activeDrawer);
+    }
+
+    @Test
+    void turnMode_rotatesDrawerOnTimeoutAndClearsRoundStrokes() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("Host7", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P72"));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P73"));
+
+        gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+
+        GameResponses.GameStateResponse beforeTurnChange = gameService.getState(host.roomCode(), host.playerId());
+        long currentDrawer = beforeTurnChange.activeDrawerPlayerId();
+
+        gameService.addStroke(host.roomCode(), new GameRequests.AddStrokeRequest(
+                currentDrawer,
+                List.of(new GameRequests.StrokePoint(20, 20), new GameRequests.StrokePoint(80, 80))));
+
+        GameRoom room = roomRepository.findByCode(host.roomCode()).orElseThrow();
+        room.setPhaseEndsAt(java.time.Instant.now().minusSeconds(1));
+        roomRepository.save(room);
+
+        boolean advanced = gameService.advanceRoomIfNeeded(host.roomCode());
+        assertThat(advanced).isTrue();
+
+        GameResponses.GameStateResponse afterTurnChange = gameService.getState(host.roomCode(), host.playerId());
+        assertThat(afterTurnChange.activeDrawerPlayerId()).isNotEqualTo(currentDrawer);
+        assertThat(afterTurnChange.strokes()).isEmpty();
+        assertThat(afterTurnChange.phase()).isEqualTo(GamePhase.DRAWING);
     }
 
     @Test

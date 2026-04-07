@@ -7,12 +7,13 @@ El modo `TURN_BASED` permite que solo un jugador dibuje cada vez, con rotación 
 ## Reglas
 
 - El host elige el modo al crear sala: `SIMULTANEOUS` o `TURN_BASED`.
-- En `TURN_BASED`, cada ronda tiene un tiempo máximo (`roundDurationSeconds`).
+- En `TURN_BASED`, cada turno individual usa `roundDurationSeconds` como duración máxima para el jugador activo.
 - Solo el jugador con `activeDrawerPlayerId` puede dibujar en ese instante.
+- En cada cambio de turno se limpian los trazos visibles del canvas para que el siguiente jugador dibuje desde cero.
 - Cualquier jugador puede votar desde el menú lateral durante la fase de dibujo.
 - La ronda termina cuando:
   - votan todos los jugadores, o
-  - vence el tiempo máximo de ronda.
+  - todos los jugadores completan su turno de dibujo.
 - Si la mayoría única acierta al impostor, jugadores normales +1 punto.
 - Si fallan o hay empate, impostor +3 puntos.
 
