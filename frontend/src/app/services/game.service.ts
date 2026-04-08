@@ -67,6 +67,7 @@ export class GameService {
   private stompClient: Client | null = null;
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
+  private wsFailedAttempts = 0;
 
   /* ── Signals (reactive state) ──────────── */
   readonly roomCode = signal<string | null>(null);
@@ -78,6 +79,8 @@ export class GameService {
   readonly message = signal('');
   readonly isLoading = signal(false);
   readonly wsConnected = signal(false);
+  readonly wsFallbackMode = signal(false);
+  readonly wsEverConnected = signal(false);
 
   /* ── Computed ───────────────────────────── */
   readonly canStart = computed(() => {
@@ -130,6 +133,12 @@ export class GameService {
     const s = this.state();
     if (!s?.majorityVotedPlayerId) return 'Empate';
     return s.players.find(p => p.id === s.majorityVotedPlayerId)?.name ?? 'Empate';
+  });
+
+  readonly wsStatusLabel = computed(() => {
+    if (this.wsConnected()) return 'Conectado';
+    if (this.wsFallbackMode()) return 'Modo respaldo (polling)';
+    return 'Reconectando...';
   });
 
   readonly themes: ThemeOption[] = [
@@ -281,10 +290,12 @@ export class GameService {
     if (!rc || !pid) return;
 
     this.disconnectWebSocket();
+    this.wsFallbackMode.set(false);
 
     const sockJsModule = await import('sockjs-client').catch(() => null);
     if (!sockJsModule) {
       this.showError('No se pudo inicializar el canal en tiempo real.');
+      this.wsFallbackMode.set(true);
       return;
     }
     const SockJSCtor = (sockJsModule as any).default ?? sockJsModule;
@@ -292,10 +303,15 @@ export class GameService {
     this.stompClient = new Client({
       webSocketFactory: () => new SockJSCtor(this.wsBase) as any,
       reconnectDelay: 3000,
-      heartbeatIncoming: 10000,
-      heartbeatOutgoing: 10000,
+      // Spring simple broker doesn't send heartbeats by default; disabling avoids false reconnect loops.
+      heartbeatIncoming: 0,
+      heartbeatOutgoing: 0,
+      connectionTimeout: 8000,
       onConnect: () => {
         this.wsConnected.set(true);
+        this.wsEverConnected.set(true);
+        this.wsFallbackMode.set(false);
+        this.wsFailedAttempts = 0;
         this.stompClient?.subscribe(`/topic/room/${rc}/player/${pid}`, (msg: IMessage) => {
           try {
             const state: GameState = JSON.parse(msg.body);
@@ -308,8 +324,10 @@ export class GameService {
         // Fetch initial state
         this.fetchState();
       },
-      onDisconnect: () => this.wsConnected.set(false),
-      onStompError: () => this.wsConnected.set(false),
+      onDisconnect: () => this.markWsFailure(),
+      onStompError: () => this.markWsFailure(),
+      onWebSocketClose: () => this.markWsFailure(),
+      onWebSocketError: () => this.markWsFailure(),
     });
 
     this.stompClient.activate();
@@ -321,6 +339,14 @@ export class GameService {
       this.stompClient = null;
     }
     this.wsConnected.set(false);
+  }
+
+  private markWsFailure(): void {
+    this.wsConnected.set(false);
+    this.wsFailedAttempts += 1;
+    if (!this.wsEverConnected() && this.wsFailedAttempts >= 2) {
+      this.wsFallbackMode.set(true);
+    }
   }
 
   private startPolling(): void {
@@ -362,6 +388,9 @@ export class GameService {
     this.disconnectWebSocket();
     this.stopPolling();
     if (this.countdownHandle) clearInterval(this.countdownHandle);
+    this.wsFailedAttempts = 0;
+    this.wsFallbackMode.set(false);
+    this.wsEverConnected.set(false);
     this.roomCode.set(null);
     this.playerId.set(null);
     this.isHost.set(false);

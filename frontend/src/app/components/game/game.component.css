@@ -733,6 +733,10 @@
   background: var(--accent-green);
 }
 
+.ws-status.fallback .ws-dot {
+  background: var(--accent-amber);
+}
+
 /* ── Overlays ──────────────────────────────── */
 .overlay {
   position: fixed;

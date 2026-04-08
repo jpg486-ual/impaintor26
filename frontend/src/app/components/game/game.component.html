@@ -233,9 +233,9 @@
           <!-- Game mode info -->
           <div class="sidebar-card glass-panel mode-info">
             <span class="mode-badge">{{ state.gameMode === 'SIMULTANEOUS' ? '👥 Simultáneo' : '🔄 Por turnos' }}</span>
-            <div class="ws-status" [class.connected]="game.wsConnected()">
+            <div class="ws-status" [class.connected]="game.wsConnected()" [class.fallback]="game.wsFallbackMode()">
               <span class="ws-dot"></span>
-              {{ game.wsConnected() ? 'Conectado' : 'Reconectando...' }}
+              {{ game.wsStatusLabel() }}
             </div>
           </div>
         </aside>
