@@ -28,7 +28,7 @@
       </div>
 
       <div class="bar-right">
-        @if (state.phase !== 'WAITING' && state.phase !== 'FINISHED') {
+        @if (state.phase !== 'WAITING' && state.phase !== 'FINISHED' && state.phaseEndsAt) {
           <div class="timer" [class.low-time]="isLowTime()">
             <svg class="timer-ring" viewBox="0 0 36 36">
               <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
@@ -132,6 +132,7 @@
               class="player-card glass-panel"
               [class.empty]="!player"
               [class.current-player]="player && isCurrentPlayer(player.id)"
+              [class.turn-active-card]="player && isActiveTurn(player.id)"
               [class.is-drawing]="player && state.phase === 'DRAWING' && isDrawingEnabled(player.id)"
             >
               @if (player) {
@@ -147,6 +148,12 @@
                   </div>
                   <span class="card-score">{{ player.score }} pts</span>
                 </header>
+
+                @if (isActiveTurn(player.id)) {
+                  <div class="turn-active-badge" [class.self]="isCurrentPlayer(player.id)">
+                    {{ getTurnBadgeText(player) }}
+                  </div>
+                }
 
                 <div class="canvas-wrapper" [style.border-color]="isDrawingEnabled(player.id) ? getPlayerColor(player.id) : 'transparent'">
                   <app-canvas
@@ -183,7 +190,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
           <!-- Voting Status -->
-          @if (state.phase === 'VOTING' || (game.isTurnBased() && state.phase === 'DRAWING')) {
+          @if (state.phase === 'VOTING' || (state.gameMode === 'TURN_BASED' && state.phase === 'DRAWING')) {
             <div class="sidebar-card glass-panel">
               <h3 class="sidebar-title">🗳️ Votación</h3>
               <div class="vote-progress">
@@ -194,6 +201,14 @@
               </div>
               @if (state.yourVoteTargetPlayerId) {
                 <p class="voted-msg">✅ Ya has votado</p>
+              }
+
+              @if (state.gameMode === 'TURN_BASED') {
+                <p class="voting-open-note">Votación sin límite de tiempo.</p>
+              }
+
+              @if (game.canHostSkipVoting()) {
+                <button class="skip-vote-btn" (click)="skipVoting()">⏭️ Omitir votación</button>
               }
             </div>
           }

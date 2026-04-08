@@ -93,7 +93,16 @@ export class GameService {
   readonly canVoteNow = computed(() => {
     const s = this.state();
     if (!s || s.yourVoteTargetPlayerId) return false;
-    return s.gameMode === 'TURN_BASED' ? s.phase === 'DRAWING' : s.phase === 'VOTING';
+    return s.phase === 'VOTING'
+      || (s.gameMode === 'TURN_BASED' && s.phase === 'DRAWING');
+  });
+
+  readonly canHostSkipVoting = computed(() => {
+    const s = this.state();
+    return !!s
+      && s.gameMode === 'TURN_BASED'
+      && s.youAreHost
+      && (s.phase === 'DRAWING' || s.phase === 'VOTING');
   });
 
   readonly isTurnBased = computed(() => this.state()?.gameMode === 'TURN_BASED');
@@ -216,6 +225,19 @@ export class GameService {
     this.http.post<void>(`${this.apiBase}/${rc}/votes`, {
       voterPlayerId: pid,
       targetPlayerId,
+    }).subscribe({
+      next: () => this.fetchState(),
+      error: (e) => this.handleError(e),
+    });
+  }
+
+  skipVoting(): void {
+    const rc = this.roomCode();
+    const pid = this.playerId();
+    if (!rc || !pid) return;
+
+    this.http.post<void>(`${this.apiBase}/${rc}/votes/skip`, {
+      playerId: pid,
     }).subscribe({
       next: () => this.fetchState(),
       error: (e) => this.handleError(e),

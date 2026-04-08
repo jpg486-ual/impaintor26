@@ -114,6 +114,24 @@ export class GameComponent implements OnInit {
     this.game.vote(targetPlayerId);
   }
 
+  skipVoting(): void {
+    this.game.skipVoting();
+  }
+
+  isActiveTurn(playerId: number): boolean {
+    const state = this.game.state();
+    return !!state
+      && state.gameMode === 'TURN_BASED'
+      && state.phase === 'DRAWING'
+      && state.activeDrawerPlayerId === playerId;
+  }
+
+  getTurnBadgeText(player: PlayerView): string {
+    return this.isCurrentPlayer(player.id)
+      ? '✏️ Tu turno: dibuja ahora'
+      : `⏳ Turno de ${player.name}`;
+  }
+
   startGame(): void {
     this.game.startGame();
   }

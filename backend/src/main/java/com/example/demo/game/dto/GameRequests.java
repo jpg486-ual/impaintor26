@@ -46,4 +46,8 @@ public final class GameRequests {
             @Min(1) long voterPlayerId,
             @Min(1) long targetPlayerId) {
     }
+
+    public record SkipVotingRequest(
+            @Min(1) long playerId) {
+    }
 }

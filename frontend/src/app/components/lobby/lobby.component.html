@@ -88,40 +88,59 @@
       </div>
 
       <!-- Duration sliders -->
-      <div class="sliders-row">
-        <div class="field-group">
-          <label class="field-label" for="round-duration">
-            <span class="label-icon">⏱️</span>
-            Duración ronda
-            <span class="field-value">{{ roundDuration }}s</span>
-          </label>
-          <input
-            id="round-duration"
-            type="range"
-            class="range-input"
-            [(ngModel)]="roundDuration"
-            min="20"
-            max="300"
-            step="5"
-          />
-        </div>
+      <div class="sliders-row" [class.turn-based]="selectedGameMode === 'TURN_BASED'">
+        @if (selectedGameMode === 'SIMULTANEOUS') {
+          <div class="field-group">
+            <label class="field-label" for="round-duration">
+              <span class="label-icon">⏱️</span>
+              Duración ronda
+              <span class="field-value">{{ roundDuration }}s</span>
+            </label>
+            <input
+              id="round-duration"
+              type="range"
+              class="range-input"
+              [(ngModel)]="roundDuration"
+              min="20"
+              max="300"
+              step="5"
+            />
+          </div>
 
-        <div class="field-group">
-          <label class="field-label" for="voting-duration">
-            <span class="label-icon">🗳️</span>
-            Duración votación
-            <span class="field-value">{{ votingDuration }}s</span>
-          </label>
-          <input
-            id="voting-duration"
-            type="range"
-            class="range-input"
-            [(ngModel)]="votingDuration"
-            min="10"
-            max="120"
-            step="5"
-          />
-        </div>
+          <div class="field-group">
+            <label class="field-label" for="voting-duration">
+              <span class="label-icon">🗳️</span>
+              Duración votación
+              <span class="field-value">{{ votingDuration }}s</span>
+            </label>
+            <input
+              id="voting-duration"
+              type="range"
+              class="range-input"
+              [(ngModel)]="votingDuration"
+              min="10"
+              max="120"
+              step="5"
+            />
+          </div>
+        } @else {
+          <div class="field-group">
+            <label class="field-label" for="drawing-duration">
+              <span class="label-icon">✏️</span>
+              Duración de dibujado
+              <span class="field-value">{{ drawingDuration }}s</span>
+            </label>
+            <input
+              id="drawing-duration"
+              type="range"
+              class="range-input"
+              [(ngModel)]="drawingDuration"
+              min="20"
+              max="300"
+              step="5"
+            />
+          </div>
+        }
 
         <div class="field-group">
           <label class="field-label" for="max-rounds">
@@ -140,6 +159,12 @@
           />
         </div>
       </div>
+
+      @if (selectedGameMode === 'TURN_BASED') {
+        <p class="mode-help-text">
+          En este modo solo se configura la duración de dibujado y el número de rondas. La votación no tiene límite de tiempo y el host puede omitirla.
+        </p>
+      }
 
       <!-- Themes -->
       <div class="field-group">

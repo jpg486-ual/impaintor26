@@ -65,4 +65,10 @@ public class GameController {
     public void vote(@PathVariable String roomCode, @Valid @RequestBody GameRequests.VoteRequest request) {
         gameService.vote(roomCode, request);
     }
+
+    @PostMapping("/{roomCode}/votes/skip")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void skipVoting(@PathVariable String roomCode, @Valid @RequestBody GameRequests.SkipVotingRequest request) {
+        gameService.skipVoting(roomCode, request);
+    }
 }

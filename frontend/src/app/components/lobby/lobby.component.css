@@ -273,6 +273,21 @@
   gap: 1rem;
 }
 
+.sliders-row.turn-based {
+  grid-template-columns: 1fr 1fr;
+}
+
+.mode-help-text {
+  margin: -0.35rem 0 0;
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  background: rgba(6, 182, 212, 0.08);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .range-input {
   -webkit-appearance: none;
   appearance: none;
@@ -445,6 +460,10 @@
   }
 
   .sliders-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sliders-row.turn-based {
     grid-template-columns: 1fr;
   }
 

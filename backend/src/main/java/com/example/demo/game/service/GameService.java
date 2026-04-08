@@ -3,12 +3,14 @@ package com.example.demo.game.service;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -191,9 +193,8 @@ public class GameService {
     public void vote(String roomCode, GameRequests.VoteRequest request) {
         GameRoom room = getRoomOrThrow(roomCode);
 
-        boolean validVotingPhase = room.getGameMode() == GameMode.TURN_BASED
-                ? room.getPhase() == GamePhase.DRAWING
-                : room.getPhase() == GamePhase.VOTING;
+        boolean validVotingPhase = room.getPhase() == GamePhase.VOTING
+                || (room.getGameMode() == GameMode.TURN_BASED && room.getPhase() == GamePhase.DRAWING);
 
         if (!validVotingPhase) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ahora no es fase de voto");
@@ -224,6 +225,28 @@ public class GameService {
             resolveVotes(room);
         }
 
+        broadcastState(room.getCode());
+    }
+
+    @Transactional
+    public void skipVoting(String roomCode, GameRequests.SkipVotingRequest request) {
+        GameRoom room = getRoomOrThrow(roomCode);
+        if (room.getGameMode() != GameMode.TURN_BASED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solo disponible en modo por turnos");
+        }
+
+        GamePlayer host = playerRepository.findByIdAndRoomCode(request.playerId(), roomCode)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Jugador inválido"));
+        if (!host.getName().equals(room.getHostName())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el host puede omitir la votación");
+        }
+
+        // Idempotent: if voting is already closed, silently return.
+        if (room.getPhase() != GamePhase.DRAWING && room.getPhase() != GamePhase.VOTING) {
+            return;
+        }
+
+        resolveVotes(room);
         broadcastState(room.getCode());
     }
 
@@ -370,11 +393,9 @@ public class GameService {
 
         if (room.getPhase() == GamePhase.DRAWING) {
             if (room.getGameMode() == GameMode.SIMULTANEOUS) {
-                room.setPhase(GamePhase.VOTING);
-                room.setPhaseEndsAt(now.plusSeconds(room.getVotingDurationSeconds()));
-                roomRepository.save(room);
+                beginVotingPhase(room, now);
             } else {
-                advanceTurnOrResolve(room, now);
+                advanceTurn(room, now);
             }
             return true;
         }
@@ -407,15 +428,13 @@ public class GameService {
         GamePlayer impostor = players.get(random.nextInt(players.size()));
         room.setImpostorPlayerId(impostor.getId());
         room.setCurrentWord(pickWord(room.getThemesCsv()));
-        room.setPhase(GamePhase.DRAWING);
-        room.setPhaseEndsAt(Instant.now().plusSeconds(room.getRoundDurationSeconds()));
         room.setTurnsCompletedInRound(0);
 
         if (room.getGameMode() == GameMode.TURN_BASED) {
-            int startingDrawer = random.nextInt(players.size());
-            room.setActiveDrawerTurnIndex(startingDrawer);
-            room.setActiveDrawerPlayerId(players.get(startingDrawer).getId());
+            startTurn(room, players, 0, Instant.now());
         } else {
+            room.setPhase(GamePhase.DRAWING);
+            room.setPhaseEndsAt(Instant.now().plusSeconds(room.getRoundDurationSeconds()));
             room.setActiveDrawerPlayerId(null);
             room.setActiveDrawerTurnIndex(0);
         }
@@ -423,34 +442,48 @@ public class GameService {
         roomRepository.save(room);
     }
 
-    private void advanceTurnOrResolve(GameRoom room, Instant now) {
+    private void advanceTurn(GameRoom room, Instant now) {
         List<GamePlayer> players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(room.getCode());
         if (players.isEmpty()) {
-            resolveVotes(room);
             return;
         }
 
-        int completedTurns = room.getTurnsCompletedInRound() + 1;
-        if (completedTurns >= players.size()) {
-            resolveVotes(room);
-            return;
-        }
-
-        room.setTurnsCompletedInRound(completedTurns);
-        rotateActiveDrawer(room, players);
-        room.setPhaseEndsAt(now.plusSeconds(room.getRoundDurationSeconds()));
-        strokeRepository.deleteByRoomCodeAndRoundNumber(room.getCode(), room.getCurrentRound());
+        int nextTurnNumber = room.getTurnsCompletedInRound() + 1;
+        startTurn(room, players, nextTurnNumber, now);
         roomRepository.save(room);
     }
 
-    private void rotateActiveDrawer(GameRoom room, List<GamePlayer> players) {
-        if (players.isEmpty()) {
+    private void startTurn(GameRoom room, List<GamePlayer> players, int turnNumber, Instant now) {
+        List<GamePlayer> turnOrder = buildTurnOrder(room, players);
+        if (turnOrder.isEmpty()) {
             return;
         }
+        int turnOrderIndex = Math.floorMod(turnNumber, turnOrder.size());
 
-        int next = (room.getActiveDrawerTurnIndex() + 1) % players.size();
-        room.setActiveDrawerTurnIndex(next);
-        room.setActiveDrawerPlayerId(players.get(next).getId());
+        // In turn mode, each player starts with a clean board when their turn begins.
+        strokeRepository.deleteByRoomCodeAndRoundNumber(room.getCode(), room.getCurrentRound());
+
+        room.setPhase(GamePhase.DRAWING);
+        room.setTurnsCompletedInRound(turnNumber);
+        room.setActiveDrawerTurnIndex(turnOrderIndex);
+        room.setActiveDrawerPlayerId(turnOrder.get(turnOrderIndex).getId());
+        room.setPhaseEndsAt(now.plusSeconds(room.getRoundDurationSeconds()));
+    }
+
+    private void beginVotingPhase(GameRoom room, Instant now) {
+        room.setPhase(GamePhase.VOTING);
+        room.setActiveDrawerPlayerId(null);
+        room.setPhaseEndsAt(room.getGameMode() == GameMode.TURN_BASED
+                ? null
+                : now.plusSeconds(room.getVotingDurationSeconds()));
+        roomRepository.save(room);
+    }
+
+    private List<GamePlayer> buildTurnOrder(GameRoom room, List<GamePlayer> players) {
+        List<GamePlayer> shuffled = new ArrayList<>(players);
+        long seed = Objects.hash(room.getCode(), room.getCurrentRound());
+        Collections.shuffle(shuffled, new Random(seed));
+        return shuffled;
     }
 
     private void resolveVotes(GameRoom room) {

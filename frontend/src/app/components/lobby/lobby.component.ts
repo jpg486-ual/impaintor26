@@ -16,17 +16,25 @@ export class LobbyComponent {
   username = '';
   roomCodeInput = '';
   selectedGameMode: GameMode = 'SIMULTANEOUS';
+  drawingDuration = 60;
   roundDuration = 60;
   votingDuration = 25;
   maxRounds = 5;
   activeTab: 'create' | 'join' = 'create';
 
   createRoom(): void {
+    const roundDurationSeconds = this.selectedGameMode === 'TURN_BASED'
+      ? this.drawingDuration
+      : this.roundDuration;
+    const votingDurationSeconds = this.selectedGameMode === 'TURN_BASED'
+      ? 10
+      : this.votingDuration;
+
     this.game.createRoom(
       this.username,
       this.selectedGameMode,
-      this.roundDuration,
-      this.votingDuration,
+      roundDurationSeconds,
+      votingDurationSeconds,
       this.maxRounds,
     );
   }
