@@ -64,10 +64,15 @@ export interface ThemeOption {
 export class GameService {
   private readonly apiBase = 'http://localhost:8080/api/rooms';
   private readonly wsBase = 'http://localhost:8080/api/ws';
+  private readonly wsNativeBase = this.wsBase.replace(/^http/i, 'ws');
   private stompClient: Client | null = null;
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
   private wsFailedAttempts = 0;
+  private wsFallbackAttempted = false;
+  private manualWsDisconnect = false;
+  private wsRoomCode: string | null = null;
+  private wsPlayerId: number | null = null;
 
   /* ── Signals (reactive state) ──────────── */
   readonly roomCode = signal<string | null>(null);
@@ -81,6 +86,8 @@ export class GameService {
   readonly wsConnected = signal(false);
   readonly wsFallbackMode = signal(false);
   readonly wsEverConnected = signal(false);
+  readonly wsTransport = signal<'NATIVE_WS' | 'SOCKJS' | 'POLLING'>('NATIVE_WS');
+  readonly wsLastError = signal('');
 
   /* ── Computed ───────────────────────────── */
   readonly canStart = computed(() => {
@@ -136,7 +143,9 @@ export class GameService {
   });
 
   readonly wsStatusLabel = computed(() => {
-    if (this.wsConnected()) return 'Conectado';
+    if (this.wsConnected()) {
+      return this.wsTransport() === 'SOCKJS' ? 'Conectado (SockJS)' : 'Conectado (WebSocket)';
+    }
     if (this.wsFallbackMode()) return 'Modo respaldo (polling)';
     return 'Reconectando...';
   });
@@ -289,30 +298,79 @@ export class GameService {
     const pid = this.playerId();
     if (!rc || !pid) return;
 
-    this.disconnectWebSocket();
+    this.wsRoomCode = rc;
+    this.wsPlayerId = pid;
+    this.wsFailedAttempts = 0;
+    this.wsFallbackAttempted = false;
+    this.wsLastError.set('');
     this.wsFallbackMode.set(false);
+    this.wsEverConnected.set(false);
 
+    this.disconnectWebSocket();
+    this.manualWsDisconnect = false;
+
+    this.connectWithNativeWebSocket(rc, pid);
+  }
+
+  private connectWithNativeWebSocket(roomCode: string, playerId: number): void {
+    this.wsTransport.set('NATIVE_WS');
+    this.stompClient = this.buildStompClient({
+      roomCode,
+      playerId,
+      brokerURL: this.wsNativeBase,
+      transportName: 'WebSocket',
+    });
+    this.stompClient.activate();
+  }
+
+  private async connectWithSockJs(roomCode: string, playerId: number): Promise<void> {
     const sockJsModule = await import('sockjs-client').catch(() => null);
     if (!sockJsModule) {
       this.showError('No se pudo inicializar el canal en tiempo real.');
       this.wsFallbackMode.set(true);
+      this.wsTransport.set('POLLING');
       return;
     }
     const SockJSCtor = (sockJsModule as any).default ?? sockJsModule;
 
-    this.stompClient = new Client({
+    this.wsTransport.set('SOCKJS');
+    this.disconnectWebSocket();
+    this.manualWsDisconnect = false;
+    this.stompClient = this.buildStompClient({
+      roomCode,
+      playerId,
       webSocketFactory: () => new SockJSCtor(this.wsBase) as any,
+      transportName: 'SockJS',
+    });
+
+    this.stompClient.activate();
+  }
+
+  private buildStompClient(config: {
+    roomCode: string;
+    playerId: number;
+    transportName: 'WebSocket' | 'SockJS';
+    brokerURL?: string;
+    webSocketFactory?: () => WebSocket;
+  }): Client {
+    return new Client({
+      brokerURL: config.brokerURL,
+      webSocketFactory: config.webSocketFactory,
       reconnectDelay: 3000,
       // Spring simple broker doesn't send heartbeats by default; disabling avoids false reconnect loops.
       heartbeatIncoming: 0,
       heartbeatOutgoing: 0,
       connectionTimeout: 8000,
+      debug: (line: string) => {
+        console.debug(`[STOMP ${config.transportName}] ${line}`);
+      },
       onConnect: () => {
         this.wsConnected.set(true);
         this.wsEverConnected.set(true);
         this.wsFallbackMode.set(false);
         this.wsFailedAttempts = 0;
-        this.stompClient?.subscribe(`/topic/room/${rc}/player/${pid}`, (msg: IMessage) => {
+        this.wsLastError.set('');
+        this.stompClient?.subscribe(`/topic/room/${config.roomCode}/player/${config.playerId}`, (msg: IMessage) => {
           try {
             const state: GameState = JSON.parse(msg.body);
             this.state.set(state);
@@ -324,16 +382,15 @@ export class GameService {
         // Fetch initial state
         this.fetchState();
       },
-      onDisconnect: () => this.markWsFailure(),
-      onStompError: () => this.markWsFailure(),
-      onWebSocketClose: () => this.markWsFailure(),
-      onWebSocketError: () => this.markWsFailure(),
+      onDisconnect: () => this.markWsFailure('Desconectado del broker STOMP'),
+      onStompError: (frame) => this.markWsFailure(`STOMP error: ${frame.headers['message'] ?? 'sin detalle'}`),
+      onWebSocketClose: (event) => this.markWsFailure(`Socket cerrado (${event.code})`),
+      onWebSocketError: () => this.markWsFailure('Error de transporte WebSocket'),
     });
-
-    this.stompClient.activate();
   }
 
   private disconnectWebSocket(): void {
+    this.manualWsDisconnect = true;
     if (this.stompClient) {
       this.stompClient.deactivate();
       this.stompClient = null;
@@ -341,11 +398,29 @@ export class GameService {
     this.wsConnected.set(false);
   }
 
-  private markWsFailure(): void {
+  private markWsFailure(reason: string): void {
+    if (this.manualWsDisconnect) {
+      return;
+    }
+
     this.wsConnected.set(false);
+    this.wsLastError.set(reason);
+    console.warn(`[WS] ${reason}`);
     this.wsFailedAttempts += 1;
+
+    if (!this.wsEverConnected()
+      && !this.wsFallbackAttempted
+      && this.wsTransport() === 'NATIVE_WS'
+      && this.wsRoomCode
+      && this.wsPlayerId) {
+      this.wsFallbackAttempted = true;
+      void this.connectWithSockJs(this.wsRoomCode, this.wsPlayerId);
+      return;
+    }
+
     if (!this.wsEverConnected() && this.wsFailedAttempts >= 2) {
       this.wsFallbackMode.set(true);
+      this.wsTransport.set('POLLING');
     }
   }
 
@@ -389,8 +464,13 @@ export class GameService {
     this.stopPolling();
     if (this.countdownHandle) clearInterval(this.countdownHandle);
     this.wsFailedAttempts = 0;
+    this.wsFallbackAttempted = false;
     this.wsFallbackMode.set(false);
     this.wsEverConnected.set(false);
+    this.wsTransport.set('NATIVE_WS');
+    this.wsLastError.set('');
+    this.wsRoomCode = null;
+    this.wsPlayerId = null;
     this.roomCode.set(null);
     this.playerId.set(null);
     this.isHost.set(false);

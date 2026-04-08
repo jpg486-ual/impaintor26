@@ -233,10 +233,13 @@
           <!-- Game mode info -->
           <div class="sidebar-card glass-panel mode-info">
             <span class="mode-badge">{{ state.gameMode === 'SIMULTANEOUS' ? '👥 Simultáneo' : '🔄 Por turnos' }}</span>
-            <div class="ws-status" [class.connected]="game.wsConnected()" [class.fallback]="game.wsFallbackMode()">
+            <div class="ws-status" [class.connected]="game.wsConnected()" [class.fallback]="game.wsFallbackMode()" [attr.title]="game.wsLastError() || null">
               <span class="ws-dot"></span>
               {{ game.wsStatusLabel() }}
             </div>
+            @if (!game.wsConnected() && game.wsLastError()) {
+              <span class="ws-detail">{{ game.wsLastError() }}</span>
+            }
           </div>
         </aside>
       </div>
