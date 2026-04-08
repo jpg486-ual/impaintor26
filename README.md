@@ -34,6 +34,10 @@ Juego multijugador tipo "impostor" para hasta 6 jugadores, con dibujo en tiempo 
 docker compose up --build
 ```
 
+- En cada reinicio del backend se ejecuta una comprobación de integridad de datos de juego.
+- Si se detectan inconsistencias (por ejemplo, referencias huérfanas entre salas, jugadores, votos o trazos), se reinicializa todo el estado persistido del juego para arrancar en limpio.
+- Si el reinicio detecta un desfase de esquema conocido (por ejemplo, columnas nuevas faltantes en `game_rooms`), intenta repararlo automáticamente y luego reinicializa los datos del juego.
+
 ### Timers y sincronización
 
 - El backend marca el fin de fase con `phaseEndsAt` (timestamp absoluto).

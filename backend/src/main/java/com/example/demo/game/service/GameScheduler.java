@@ -2,7 +2,8 @@ package com.example.demo.game.service;
 
 import java.util.List;
 
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,22 +14,34 @@ import com.example.demo.game.repository.GameRoomRepository;
 @Component
 public class GameScheduler {
 
+    private static final Logger log = LoggerFactory.getLogger(GameScheduler.class);
+
     private final GameRoomRepository roomRepository;
     private final GameService gameService;
-    private final SimpMessagingTemplate messaging;
+    private final GameDataIntegrityGuard dataIntegrityGuard;
 
     public GameScheduler(GameRoomRepository roomRepository, GameService gameService,
-            SimpMessagingTemplate messaging) {
+            GameDataIntegrityGuard dataIntegrityGuard) {
         this.roomRepository = roomRepository;
         this.gameService = gameService;
-        this.messaging = messaging;
+        this.dataIntegrityGuard = dataIntegrityGuard;
     }
 
     @Scheduled(fixedRate = 2000)
     public void advanceAndBroadcast() {
-        List<GameRoom> activeRooms = roomRepository.findAll().stream()
-                .filter(room -> room.getPhase() != GamePhase.FINISHED && room.getPhase() != GamePhase.WAITING)
-                .toList();
+        if (!dataIntegrityGuard.isStartupCheckCompleted()) {
+            return;
+        }
+
+        List<GameRoom> activeRooms;
+        try {
+            activeRooms = roomRepository.findAll().stream()
+                    .filter(room -> room.getPhase() != GamePhase.FINISHED && room.getPhase() != GamePhase.WAITING)
+                    .toList();
+        } catch (Exception e) {
+            log.warn("Could not load active rooms during scheduler cycle: {}", e.getMessage());
+            return;
+        }
 
         for (GameRoom room : activeRooms) {
             try {
@@ -44,6 +57,14 @@ public class GameScheduler {
 
     @Scheduled(fixedRate = 30000)
     public void cleanupRooms() {
-        gameService.cleanupFinishedRooms();
+        if (!dataIntegrityGuard.isStartupCheckCompleted()) {
+            return;
+        }
+
+        try {
+            gameService.cleanupFinishedRooms();
+        } catch (Exception e) {
+            log.warn("Could not clean finished rooms during scheduler cycle: {}", e.getMessage());
+        }
     }
 }
