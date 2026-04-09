@@ -461,11 +461,7 @@ public class GameService {
         int turnOrderIndex = Math.floorMod(turnNumber, turnOrder.size());
 
         // In turn mode, each player starts with a clean board when their turn begins.
-        if (room.getGameMode() == GameMode.TURN_BASED) {
-            strokeRepository.deleteByRoomCodeAndRoundNumberAndPlayer(room.getCode(), room.getCurrentRound(), turnOrder.get(turnOrderIndex).getId());
-        }   else{
-            strokeRepository.deleteByRoomCodeAndRoundNumber(room.getCode(), room.getCurrentRound());
-        }
+        strokeRepository.deleteByRoomCodeAndRoundNumber(room.getCode(), room.getCurrentRound());
 
         room.setPhase(GamePhase.DRAWING);
         room.setTurnsCompletedInRound(turnNumber);
