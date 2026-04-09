@@ -11,5 +11,7 @@ public interface DrawingStrokeRepository extends JpaRepository<DrawingStroke, Lo
 
     void deleteByRoomCodeAndRoundNumber(String roomCode, int roundNumber);
 
+    void deleteByRoomCodeAndRoundNumberAndPlayer(String roomCode, int roundNumber, Long playerId);
+
     void deleteByRoomCode(String roomCode);
 }
