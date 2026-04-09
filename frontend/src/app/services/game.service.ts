@@ -62,9 +62,9 @@ export interface ThemeOption {
 /* ── Service ───────────────────────────────── */
 @Injectable({providedIn: 'root'})
 export class GameService {
-  private readonly apiBase = 'http://localhost:8080/api/rooms';
-  private readonly wsBase = 'http://localhost:8080/api/ws';
-  private readonly wsNativeBase = this.wsBase.replace(/^http/i, 'ws');
+  private readonly apiBase = '/api/rooms';
+  private readonly wsBase = '/api/ws';
+  private readonly wsNativeBase = this.buildNativeWsUrl();
   private stompClient: Client | null = null;
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
@@ -508,12 +508,23 @@ export class GameService {
     setTimeout(() => this.error.set(''), 6000);
   }
 
+  private buildNativeWsUrl(): string {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}${this.wsBase}`;
+  }
+
   private handleError(error: HttpErrorResponse): void {
+    if (error.status === 0) {
+      this.showError('No se pudo conectar con el servidor (red/CORS/proxy).');
+      return;
+    }
+
     const apiError = error.error as any;
-    const msg = apiError?.message ?? 'Error inesperado.';
+    const responseText = typeof error.error === 'string' ? error.error.trim() : '';
+    const msg = apiError?.message ?? (responseText || error.message || `Error HTTP ${error.status}`);
     const debug = apiError?.details?.exceptionType
       ? ` [${apiError.details.exceptionType}]`
-      : '';
+      : error.status ? ` [HTTP ${error.status}]` : '';
     this.showError(`${msg}${debug}`);
   }
 }

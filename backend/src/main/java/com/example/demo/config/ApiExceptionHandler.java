@@ -14,9 +14,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @Value("${app.debug-errors:false}")
     private boolean debugErrors;
@@ -27,6 +31,7 @@ public class ApiExceptionHandler {
             HttpServletRequest request) {
         HttpStatus status = HttpStatus.valueOf(exception.getStatusCode().value());
         String reason = exception.getReason() != null ? exception.getReason() : status.getReasonPhrase();
+        log.warn("API {} {} -> {} {}", request.getMethod(), request.getRequestURI(), status.value(), reason);
         return ResponseEntity.status(status).body(buildErrorResponse(status, reason, request, exception));
     }
 
@@ -41,6 +46,7 @@ public class ApiExceptionHandler {
                 .collect(Collectors.joining("; "));
 
         HttpStatus status = HttpStatus.BAD_REQUEST;
+        log.warn("API validation error {} {} -> {}", request.getMethod(), request.getRequestURI(), message);
         return ResponseEntity.status(status).body(buildErrorResponse(status, message, request, exception));
     }
 
@@ -49,6 +55,7 @@ public class ApiExceptionHandler {
             Exception exception,
             HttpServletRequest request) {
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        log.error("Unhandled API error on {} {}", request.getMethod(), request.getRequestURI(), exception);
         return ResponseEntity.status(status)
                 .body(buildErrorResponse(status, "Error inesperado en servidor", request, exception));
     }
