@@ -164,6 +164,10 @@ public class GameRoom {
         this.phaseEndsAt = phaseEndsAt;
     }
 
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
     public Instant getFinishedAt() {
         return finishedAt;
     }

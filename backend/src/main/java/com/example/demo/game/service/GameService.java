@@ -41,6 +41,7 @@ public class GameService {
     private static final int CREW_WIN_POINTS = 1;
     private static final int RESULT_SECONDS = 8;
     private static final int ROOM_TTL_AFTER_FINISH_SECONDS = 60;
+    private static final int ROOM_TTL_SECONDS = 3600; // Tiempo de vida de una sala desde su creación, para evitar que salas en modo por turnos queden activas indefinidamente
 
     private static final Map<String, List<String>> WORDS_BY_THEME = Map.of(
             "animales",
@@ -272,9 +273,10 @@ public class GameService {
     @Transactional
     public void cleanupFinishedRooms() {
         List<GameRoom> finishedRooms = roomRepository.findAll().stream()
-                .filter(room -> room.getPhase() == GamePhase.FINISHED)
-                .filter(room -> room.getFinishedAt() != null)
-                .filter(room -> room.getFinishedAt()
+                // el modo por turnos tiene tiempo de votación indefinida, así que se considera terminada tras una hora de inactividad
+                .filter(room -> room.getGameMode() == GameMode.TURN_BASED || room.getPhase() == GamePhase.FINISHED)
+                .filter(room -> (room.getGameMode() == GameMode.TURN_BASED && room.getCreatedAt().isBefore(Instant.now().minusSeconds(ROOM_TTL_SECONDS))) || room.getFinishedAt() != null)
+                .filter(room -> room.getGameMode() == GameMode.TURN_BASED ||room.getFinishedAt()
                         .isBefore(Instant.now().minusSeconds(ROOM_TTL_AFTER_FINISH_SECONDS)))
                 .toList();
 
