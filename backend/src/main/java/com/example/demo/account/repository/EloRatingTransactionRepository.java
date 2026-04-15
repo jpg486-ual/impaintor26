@@ -8,4 +8,6 @@ import com.example.demo.account.model.EloRatingTransaction;
 
 public interface EloRatingTransactionRepository extends JpaRepository<EloRatingTransaction, Long> {
     List<EloRatingTransaction> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    List<EloRatingTransaction> findByRankedMatchIdOrderByCreatedAtAsc(Long rankedMatchId);
 }

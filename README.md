@@ -52,7 +52,7 @@ Aplicación multijugador con interfaz gráfica basada en mecánicas de deducció
 - `POST /api/matchmaking/public/leave` salir de cola pública rankeada
 - `GET /api/matchmaking/public/status?userId={id}` estado de cola rankeada
 
-> Nota fase 2 ELO: la cola rankeada ya calcula expansión de ventana ELO (`±100` cada `10s`) y persiste tickets de cola. La autenticación/JWT llegará en la siguiente fase; por ahora estas rutas operan con `userId` de cuenta existente.
+> Nota ELO (fase 4): ranked es **exclusivo de `TURN_BASED`**. El worker de matchmaking corre en backend (ciclo de 1s), forma grupos compatibles por ELO y crea salas `PUBLIC_RANKED` automáticamente. `status` refleja estados terminales (incluyendo `MATCHED` con `matchedRoomCode`) y al finalizar la partida rankeada se persisten transacciones de ELO.
 
 ### Arranque local con Docker
 

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.example.demo.account.service.RankedMatchmakingService;
 import com.example.demo.game.model.GamePhase;
 import com.example.demo.game.model.GameRoom;
 import com.example.demo.game.repository.GameRoomRepository;
@@ -19,12 +20,15 @@ public class GameScheduler {
     private final GameRoomRepository roomRepository;
     private final GameService gameService;
     private final GameDataIntegrityGuard dataIntegrityGuard;
+    private final RankedMatchmakingService rankedMatchmakingService;
 
     public GameScheduler(GameRoomRepository roomRepository, GameService gameService,
-            GameDataIntegrityGuard dataIntegrityGuard) {
+            GameDataIntegrityGuard dataIntegrityGuard,
+            RankedMatchmakingService rankedMatchmakingService) {
         this.roomRepository = roomRepository;
         this.gameService = gameService;
         this.dataIntegrityGuard = dataIntegrityGuard;
+        this.rankedMatchmakingService = rankedMatchmakingService;
     }
 
     @Scheduled(fixedRate = 2000)
@@ -65,6 +69,19 @@ public class GameScheduler {
             gameService.cleanupFinishedRooms();
         } catch (Exception e) {
             log.warn("Could not clean finished rooms during scheduler cycle: {}", e.getMessage());
+        }
+    }
+
+    @Scheduled(fixedRate = 1000)
+    public void processRankedQueue() {
+        if (!dataIntegrityGuard.isStartupCheckCompleted()) {
+            return;
+        }
+
+        try {
+            rankedMatchmakingService.processQueueCycle();
+        } catch (Exception e) {
+            log.warn("Could not process ranked queue during scheduler cycle: {}", e.getMessage());
         }
     }
 }

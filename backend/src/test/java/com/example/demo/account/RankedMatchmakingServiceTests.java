@@ -1,13 +1,16 @@
 package com.example.demo.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.demo.account.dto.MatchmakingDtos;
 import com.example.demo.account.model.AppUser;
@@ -54,11 +57,21 @@ class RankedMatchmakingServiceTests {
         AppUser user = createUser("queue-repeat", "queue-repeat@example.com");
 
         MatchmakingDtos.PublicQueueStatusResponse first = matchmakingService.enqueue(user.getId(), GameMode.TURN_BASED);
-        MatchmakingDtos.PublicQueueStatusResponse second = matchmakingService.enqueue(user.getId(), GameMode.SIMULTANEOUS);
+        MatchmakingDtos.PublicQueueStatusResponse second = matchmakingService.enqueue(user.getId(), GameMode.TURN_BASED);
 
         assertThat(first.ticketId()).isEqualTo(second.ticketId());
-        assertThat(second.gameMode()).isEqualTo(GameMode.SIMULTANEOUS);
+        assertThat(second.gameMode()).isEqualTo(GameMode.TURN_BASED);
         assertThat(queueTicketRepository.findByStatusOrderByQueuedAtAsc(RankedQueueTicketStatus.QUEUED)).hasSize(1);
+    }
+
+    @Test
+    void enqueue_rejectsNonTurnBasedMode() {
+        AppUser user = createUser("queue-sim", "queue-sim@example.com");
+
+        assertThatThrownBy(() -> matchmakingService.enqueue(user.getId(), GameMode.SIMULTANEOUS))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode().value())
+                .isEqualTo(HttpStatus.CONFLICT.value());
     }
 
     @Test
@@ -88,6 +101,26 @@ class RankedMatchmakingServiceTests {
         RankedQueueTicket ticket = queueTicketRepository.findById(queued.ticketId()).orElseThrow();
         assertThat(ticket.getStatus()).isEqualTo(RankedQueueTicketStatus.CANCELLED);
         assertThat(queueTicketRepository.findByUserIdAndStatus(user.getId(), RankedQueueTicketStatus.QUEUED)).isEmpty();
+    }
+
+    @Test
+    void getStatus_returnsMatchedRoomWhenUserHasBeenPaired() {
+        AppUser user1 = createUser("queue-match-1", "queue-match-1@example.com");
+        AppUser user2 = createUser("queue-match-2", "queue-match-2@example.com");
+        AppUser user3 = createUser("queue-match-3", "queue-match-3@example.com");
+        ensureProfileElo(user1.getId(), 1200);
+        ensureProfileElo(user2.getId(), 1210);
+        ensureProfileElo(user3.getId(), 1220);
+
+        matchmakingService.enqueue(user1.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user2.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user3.getId(), GameMode.TURN_BASED);
+        matchmakingService.processQueueCycle();
+
+        MatchmakingDtos.PublicQueueStatusResponse status = matchmakingService.getStatus(user1.getId());
+        assertThat(status.queued()).isFalse();
+        assertThat(status.status()).isEqualTo(RankedQueueTicketStatus.MATCHED);
+        assertThat(status.matchedRoomCode()).isNotBlank();
     }
 
     private AppUser createUser(String username, String email) {

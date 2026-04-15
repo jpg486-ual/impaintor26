@@ -46,6 +46,9 @@ public class RankedQueueTicket {
     @Column(nullable = true)
     private Integer lastSearchMaxElo;
 
+    @Column(nullable = true, length = 6)
+    private String matchedRoomCode;
+
     @Column(nullable = false)
     private Instant createdAt;
 
@@ -128,6 +131,14 @@ public class RankedQueueTicket {
 
     public void setLastSearchMaxElo(Integer lastSearchMaxElo) {
         this.lastSearchMaxElo = lastSearchMaxElo;
+    }
+
+    public String getMatchedRoomCode() {
+        return matchedRoomCode;
+    }
+
+    public void setMatchedRoomCode(String matchedRoomCode) {
+        this.matchedRoomCode = matchedRoomCode;
     }
 
     public Instant getCreatedAt() {

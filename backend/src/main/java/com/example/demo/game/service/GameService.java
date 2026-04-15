@@ -20,6 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.demo.account.model.RankedMatch;
+import com.example.demo.account.model.RankedMatchStatus;
+import com.example.demo.account.model.UserRankProfile;
+import com.example.demo.account.repository.RankedMatchRepository;
+import com.example.demo.account.service.RatingService;
 import com.example.demo.game.dto.GameRequests;
 import com.example.demo.game.dto.GameResponses;
 import com.example.demo.game.model.DrawingStroke;
@@ -38,11 +43,16 @@ import com.example.demo.game.repository.GameVoteRepository;
 public class GameService {
 
     private static final int MAX_PLAYERS = 6;
+    private static final int MIN_PLAYERS_TO_START = 3;
     private static final int IMPOSTOR_WIN_POINTS = 3;
     private static final int CREW_WIN_POINTS = 1;
     private static final int RESULT_SECONDS = 8;
     private static final int ROOM_TTL_AFTER_FINISH_SECONDS = 60;
     private static final int ROOM_TTL_SECONDS = 3600; // Tiempo de vida de una sala desde su creación, para evitar que salas en modo por turnos queden activas indefinidamente
+    private static final int RANKED_ROUND_DURATION_SECONDS = 60;
+    private static final int RANKED_VOTING_DURATION_SECONDS = 25;
+    private static final int RANKED_MAX_ROUNDS = 5;
+    private static final List<String> RANKED_THEMES = List.of("animales", "comida", "deportes", "objetos", "profesiones");
 
     private static final Map<String, List<String>> WORDS_BY_THEME = Map.of(
             "animales",
@@ -65,19 +75,28 @@ public class GameService {
     private final GamePlayerRepository playerRepository;
     private final DrawingStrokeRepository strokeRepository;
     private final GameVoteRepository voteRepository;
+    private final RankedMatchRepository rankedMatchRepository;
+    private final RatingService ratingService;
     private final SimpMessagingTemplate messaging;
     private final SecureRandom random = new SecureRandom();
+
+    public record RankedPlayerSeed(long userId, String username) {
+    }
 
     public GameService(
             GameRoomRepository roomRepository,
             GamePlayerRepository playerRepository,
             DrawingStrokeRepository strokeRepository,
             GameVoteRepository voteRepository,
+            RankedMatchRepository rankedMatchRepository,
+            RatingService ratingService,
             SimpMessagingTemplate messaging) {
         this.roomRepository = roomRepository;
         this.playerRepository = playerRepository;
         this.strokeRepository = strokeRepository;
         this.voteRepository = voteRepository;
+        this.rankedMatchRepository = rankedMatchRepository;
+        this.ratingService = ratingService;
         this.messaging = messaging;
     }
 
@@ -111,6 +130,53 @@ public class GameService {
         playerRepository.save(player);
 
         return new GameResponses.RoomJoinResponse(room.getCode(), player.getId(), true);
+    }
+
+    @Transactional
+    public String createRankedRoom(long rankedMatchId, GameMode gameMode, List<RankedPlayerSeed> rankedPlayers) {
+        if (gameMode != GameMode.TURN_BASED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Las partidas ranked solo permiten modo por turnos");
+        }
+        if (rankedPlayers == null || rankedPlayers.size() < MIN_PLAYERS_TO_START) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Se requieren al menos 3 jugadores para ranked");
+        }
+        if (rankedPlayers.size() > MAX_PLAYERS) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La sala ranked no puede exceder 6 jugadores");
+        }
+
+        List<RankedPlayerSeed> normalizedPlayers = rankedPlayers.stream()
+                .map(player -> new RankedPlayerSeed(player.userId(), normalizeName(player.username())))
+                .toList();
+        String hostName = normalizedPlayers.get(0).username();
+
+        GameRoom room = new GameRoom();
+        room.setCode(generateCode());
+        room.setHostName(hostName);
+        room.setRoundDurationSeconds(RANKED_ROUND_DURATION_SECONDS);
+        room.setVotingDurationSeconds(RANKED_VOTING_DURATION_SECONDS);
+        room.setMaxRounds(RANKED_MAX_ROUNDS);
+        room.setThemesCsv(String.join(",", RANKED_THEMES));
+        room.setCurrentRound(0);
+        room.setGameMode(GameMode.TURN_BASED);
+        room.setRoomType(GameRoomType.PUBLIC_RANKED);
+        room.setRankedMatchId(rankedMatchId);
+        room.setPhase(GamePhase.WAITING);
+        room.setActiveDrawerTurnIndex(0);
+        room.setTurnsCompletedInRound(0);
+        room = roomRepository.save(room);
+
+        for (RankedPlayerSeed rankedPlayer : normalizedPlayers) {
+            GamePlayer player = new GamePlayer();
+            player.setRoomCode(room.getCode());
+            player.setName(rankedPlayer.username());
+            player.setScore(0);
+            player.setUserId(rankedPlayer.userId());
+            playerRepository.save(player);
+        }
+
+        beginRound(room);
+        broadcastState(room.getCode());
+        return room.getCode();
     }
 
     @Transactional
@@ -160,7 +226,7 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el creador puede iniciar");
         }
 
-        if (playerRepository.countByRoomCode(room.getCode()) < 3) {
+        if (playerRepository.countByRoomCode(room.getCode()) < MIN_PLAYERS_TO_START) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Se requieren al menos 3 jugadores");
         }
 
@@ -430,6 +496,7 @@ public class GameService {
                 room.setFinishedAt(now);
                 room.setPhaseEndsAt(now.plusSeconds(ROOM_TTL_AFTER_FINISH_SECONDS));
                 roomRepository.save(room);
+                finalizeRankedMatchIfNeeded(room, now);
             } else {
                 beginRound(room);
             }
@@ -526,6 +593,62 @@ public class GameService {
         room.setActiveDrawerPlayerId(null);
         room.setPhaseEndsAt(Instant.now().plusSeconds(RESULT_SECONDS));
         roomRepository.save(room);
+    }
+
+    private void finalizeRankedMatchIfNeeded(GameRoom room, Instant now) {
+        if (room.getRoomType() != GameRoomType.PUBLIC_RANKED || room.getRankedMatchId() == null) {
+            return;
+        }
+
+        RankedMatch rankedMatch = rankedMatchRepository.findById(room.getRankedMatchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Partida ranked inconsistente"));
+
+        if (rankedMatch.getStatus() == RankedMatchStatus.FINISHED) {
+            return;
+        }
+
+        List<GamePlayer> rankedPlayers = playerRepository.findByRoomCodeOrderByJoinedAtAsc(room.getCode()).stream()
+                .filter(player -> player.getUserId() != null)
+                .toList();
+
+        if (rankedPlayers.size() < 2) {
+            rankedMatch.setStatus(RankedMatchStatus.CANCELLED);
+            rankedMatch.setFinishedAt(now);
+            rankedMatchRepository.save(rankedMatch);
+            return;
+        }
+
+        int highestScore = rankedPlayers.stream().mapToInt(GamePlayer::getScore).max().orElse(0);
+        Set<Long> winners = rankedPlayers.stream()
+                .filter(player -> player.getScore() == highestScore)
+                .map(GamePlayer::getId)
+                .collect(Collectors.toSet());
+
+        Map<Long, UserRankProfile> profiles = new HashMap<>();
+        for (GamePlayer player : rankedPlayers) {
+            profiles.put(player.getId(), ratingService.getOrCreateProfile(player.getUserId()));
+        }
+
+        for (GamePlayer player : rankedPlayers) {
+            UserRankProfile profile = profiles.get(player.getId());
+            double opponentAverageElo = rankedPlayers.stream()
+                    .filter(other -> !other.getId().equals(player.getId()))
+                    .map(other -> profiles.get(other.getId()).getElo())
+                    .mapToInt(Integer::intValue)
+                    .average()
+                    .orElse(profile.getElo());
+
+            double actualScore = winners.contains(player.getId()) ? 1d : 0d;
+            int kFactor = ratingService.resolveKFactor(profile);
+            double expectedScore = ratingService.expectedScore(profile.getElo(), opponentAverageElo);
+            int nextElo = ratingService.computeNextElo(profile.getElo(), expectedScore, actualScore, kFactor);
+            ratingService.recordRatingUpdate(rankedMatch.getId(), player.getUserId(), nextElo, kFactor);
+        }
+
+        rankedMatch.setStatus(RankedMatchStatus.FINISHED);
+        rankedMatch.setFinishedAt(now);
+        rankedMatchRepository.save(rankedMatch);
     }
 
     private Long findMajorityVotedPlayer(List<GameVote> votes) {

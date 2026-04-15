@@ -32,6 +32,7 @@ public final class MatchmakingDtos {
             Integer searchMinElo,
             Integer searchMaxElo,
             long waitedSeconds,
-            Instant queuedAt) {
+            Instant queuedAt,
+            String matchedRoomCode) {
     }
 }
