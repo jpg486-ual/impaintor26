@@ -49,6 +49,12 @@ export class GameComponent implements OnInit {
     return `${s.totalVotesThisRound}/${s.totalPlayers}`;
   });
 
+  readonly turnCanvasStrokes = computed(() => {
+    const state = this.game.state();
+    if (!state || state.gameMode !== 'TURN_BASED') return [];
+    return state.strokes;
+  });
+
   ngOnInit(): void {
     const code = this.route.snapshot.paramMap.get('code');
     if (!this.game.roomCode() && code) {
@@ -94,6 +100,22 @@ export class GameComponent implements OnInit {
     return this.game.isDrawingEnabledFor(playerId);
   }
 
+  isTurnCanvasEnabled(): boolean {
+    const state = this.game.state();
+    if (!state) return false;
+    return state.gameMode === 'TURN_BASED'
+      && state.phase === 'DRAWING'
+      && state.activeDrawerPlayerId === this.game.playerId();
+  }
+
+  turnCanvasHint(): string {
+    const state = this.game.state();
+    if (!state || state.gameMode !== 'TURN_BASED') return '';
+    if (state.phase !== 'DRAWING') return 'Canvas bloqueado fuera de la fase de dibujo.';
+    if (this.isTurnCanvasEnabled()) return 'Es tu turno: dibuja en el canvas principal.';
+    return `Observando turno de ${this.game.activeDrawerName()}.`;
+  }
+
   onStrokeComplete(points: StrokePoint[]): void {
     this.game.sendStroke(points);
   }
@@ -112,6 +134,10 @@ export class GameComponent implements OnInit {
 
   vote(targetPlayerId: number): void {
     this.game.vote(targetPlayerId);
+  }
+
+  canVotePlayer(playerId: number): boolean {
+    return this.game.canVoteNow() && !this.isCurrentPlayer(playerId);
   }
 
   skipVoting(): void {

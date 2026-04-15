@@ -21,13 +21,15 @@ Aplicación multijugador con interfaz gráfica basada en mecánicas de deducció
 - Frontend: Angular servido por Nginx (`http://localhost:4200`)
 - Backend: Spring Boot API REST bajo `/api` (`http://localhost:8080/api`)
 - Base de datos: PostgreSQL 16 (`localhost:5432`)
+- Mensajería en tiempo real: STOMP relay sobre RabbitMQ (`localhost:61613`, panel `http://localhost:15672`)
 
 ### Flujo del juego
 
 - Un jugador crea sala y configura duración de dibujo, duración de votación, rondas y temas.
 - Los jugadores se unen con nombre único por sala.
 - En cada ronda se asigna 1 impostor (sin palabra) y al resto una palabra aleatoria según temas.
-- Todos dibujan simultáneamente en su espacio dentro de un tablero de 6 canvases.
+- En `SIMULTANEOUS`, todos dibujan a la vez en su espacio.
+- En `TURN_BASED`, hay un único canvas grande compartido visualmente: solo dibuja el jugador en turno y el resto observa.
 - Al terminar el tiempo, todos votan quién es el impostor.
 - Si aciertan mayoría única, jugadores normales ganan 1 punto.
 - Si fallan o hay empate, gana el impostor con 3 puntos.
@@ -48,6 +50,8 @@ Aplicación multijugador con interfaz gráfica basada en mecánicas de deducció
 docker compose up --build
 ```
 
+- Servicios levantados: `db`, `rabbitmq`, `backend`, `frontend`.
+- RabbitMQ Management: `http://localhost:15672` (credenciales por defecto `guest/guest`).
 - En cada reinicio del backend se ejecuta una comprobación de integridad de datos de juego.
 - Si se detectan inconsistencias (por ejemplo, referencias huérfanas entre salas, jugadores, votos o trazos), se reinicializa todo el estado persistido del juego para arrancar en limpio.
 - Si el reinicio detecta un desfase de esquema conocido (por ejemplo, columnas nuevas faltantes en `game_rooms`), intenta repararlo automáticamente y luego reinicializa los datos del juego.

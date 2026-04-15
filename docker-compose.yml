@@ -16,6 +16,21 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: impaintor-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "61613:61613"
+    volumes:
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   backend:
     build:
       context: ./backend
@@ -24,10 +39,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       DB_URL: jdbc:postgresql://db:5432/impaintor
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
+      APP_WS_BROKER_RELAY_ENABLED: "true"
+      APP_WS_BROKER_RELAY_HOST: rabbitmq
+      APP_WS_BROKER_RELAY_PORT: "61613"
+      APP_WS_BROKER_CLIENT_LOGIN: guest
+      APP_WS_BROKER_CLIENT_PASSCODE: guest
+      APP_WS_BROKER_SYSTEM_LOGIN: guest
+      APP_WS_BROKER_SYSTEM_PASSCODE: guest
+      APP_WS_BROKER_VIRTUAL_HOST: /
     ports:
       - "8080:8080"
 

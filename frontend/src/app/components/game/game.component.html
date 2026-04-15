@@ -124,125 +124,231 @@
 
     <!-- ═══ GAME BOARD ═══ -->
     @if (state.phase !== 'WAITING') {
-      <div class="game-layout">
-        <!-- Canvas Grid -->
-        <section class="canvas-grid">
-          @for (player of game.gridPlayers(); track trackPlayer($index, player)) {
-            <article
-              class="player-card glass-panel"
-              [class.empty]="!player"
-              [class.current-player]="player && isCurrentPlayer(player.id)"
-              [class.turn-active-card]="player && isActiveTurn(player.id)"
-              [class.is-drawing]="player && state.phase === 'DRAWING' && isDrawingEnabled(player.id)"
-            >
-              @if (player) {
-                <header class="card-header">
-                  <div class="card-player-info">
-                    <div class="mini-avatar" [style.background]="getPlayerColor(player.id)">
+      @if (state.gameMode === 'TURN_BASED') {
+        <div class="turn-layout">
+          <section class="turn-main glass-panel">
+            <header class="turn-main-header">
+              <h3 class="turn-main-title">🎨 Canvas principal</h3>
+              @if (state.phase === 'DRAWING' && state.activeDrawerPlayerId) {
+                <span class="turn-main-badge" [class.self]="isTurnCanvasEnabled()">
+                  {{ isTurnCanvasEnabled() ? 'Tu turno' : 'Turno de ' + game.activeDrawerName() }}
+                </span>
+              }
+            </header>
+
+            <div class="turn-canvas-wrapper" [class.is-drawing]="isTurnCanvasEnabled()">
+              <app-canvas
+                [strokes]="turnCanvasStrokes()"
+                [drawingEnabled]="isTurnCanvasEnabled()"
+                [canvasWidth]="1200"
+                [canvasHeight]="700"
+                (strokeComplete)="onStrokeComplete($event)"
+              />
+            </div>
+
+            <p class="turn-main-hint">{{ turnCanvasHint() }}</p>
+          </section>
+
+          <div class="turn-right">
+            <section class="turn-players glass-panel">
+              <h3 class="sidebar-title">👥 Jugadores</h3>
+              <div class="turn-player-list">
+                @for (player of state.players; track player.id) {
+                  <article class="turn-player-row" [class.active-turn]="isActiveTurn(player.id)">
+                    <div class="turn-player-meta">
+                      <div class="mini-avatar" [style.background]="getPlayerColor(player.id)">
+                        {{ getPlayerInitial(player.name) }}
+                      </div>
+                      <span class="turn-player-name">{{ player.name }}</span>
+                      @if (isCurrentPlayer(player.id)) {
+                        <span class="you-badge">TÚ</span>
+                      }
+                      @if (isActiveTurn(player.id)) {
+                        <span class="turn-inline-badge">TURNO</span>
+                      }
+                    </div>
+                    <div class="turn-player-actions">
+                      <span class="card-score">{{ player.score }} pts</span>
+                      @if (canVotePlayer(player.id)) {
+                        <button class="vote-btn" [attr.id]="'vote-' + player.id" (click)="vote(player.id)">
+                          🗳️ Votar
+                        </button>
+                      }
+                    </div>
+                    @if (state.yourVoteTargetPlayerId === player.id) {
+                      <div class="voted-indicator">✓ Tu voto</div>
+                    }
+                  </article>
+                }
+              </div>
+            </section>
+
+            <!-- Sidebar -->
+            <aside class="sidebar">
+              <!-- Voting Status -->
+              @if (state.phase === 'VOTING' || state.phase === 'DRAWING') {
+                <div class="sidebar-card glass-panel">
+                  <h3 class="sidebar-title">🗳️ Votación</h3>
+                  <div class="vote-progress">
+                    <div class="vote-progress-bar">
+                      <div class="vote-progress-fill" [style.width.%]="(state.totalVotesThisRound / state.totalPlayers) * 100"></div>
+                    </div>
+                    <span class="vote-count">{{ votingProgress() }} votos</span>
+                  </div>
+                  @if (state.yourVoteTargetPlayerId) {
+                    <p class="voted-msg">✅ Ya has votado</p>
+                  }
+                  <p class="voting-open-note">Votación sin límite de tiempo.</p>
+                  @if (game.canHostSkipVoting()) {
+                    <button class="skip-vote-btn" (click)="skipVoting()">⏭️ Omitir votación</button>
+                  }
+                </div>
+              }
+
+              <!-- Leaderboard -->
+              <div class="sidebar-card glass-panel">
+                <h3 class="sidebar-title">🏆 Clasificación</h3>
+                <ol class="leaderboard-list">
+                  @for (player of game.leaderboard(); track trackLeaderboard($index, player)) {
+                    <li class="lb-item" [class.is-you]="isCurrentPlayer(player.id)">
+                      <span class="lb-rank">{{ $index + 1 }}</span>
+                      <div class="lb-avatar" [style.background]="getPlayerColor(player.id)">
+                        {{ getPlayerInitial(player.name) }}
+                      </div>
+                      <span class="lb-name">{{ player.name }}</span>
+                      <span class="lb-score">{{ player.score }}</span>
+                    </li>
+                  }
+                </ol>
+              </div>
+
+              <!-- Game mode info -->
+              <div class="sidebar-card glass-panel mode-info">
+                <span class="mode-badge">🔄 Por turnos</span>
+                <div class="ws-status" [class.connected]="game.wsConnected()" [class.fallback]="game.wsFallbackMode()" [attr.title]="game.wsLastError() || null">
+                  <span class="ws-dot"></span>
+                  {{ game.wsStatusLabel() }}
+                </div>
+                @if (!game.wsConnected() && game.wsLastError()) {
+                  <span class="ws-detail">{{ game.wsLastError() }}</span>
+                }
+              </div>
+            </aside>
+          </div>
+        </div>
+      } @else {
+        <div class="game-layout">
+          <!-- Canvas Grid -->
+          <section class="canvas-grid">
+            @for (player of game.gridPlayers(); track trackPlayer($index, player)) {
+              <article
+                class="player-card glass-panel"
+                [class.empty]="!player"
+                [class.current-player]="player && isCurrentPlayer(player.id)"
+                [class.turn-active-card]="player && isActiveTurn(player.id)"
+                [class.is-drawing]="player && state.phase === 'DRAWING' && isDrawingEnabled(player.id)"
+              >
+                @if (player) {
+                  <header class="card-header">
+                    <div class="card-player-info">
+                      <div class="mini-avatar" [style.background]="getPlayerColor(player.id)">
+                        {{ getPlayerInitial(player.name) }}
+                      </div>
+                      <span class="card-player-name">{{ player.name }}</span>
+                      @if (isCurrentPlayer(player.id)) {
+                        <span class="you-badge">TÚ</span>
+                      }
+                    </div>
+                    <span class="card-score">{{ player.score }} pts</span>
+                  </header>
+
+                  @if (isActiveTurn(player.id)) {
+                    <div class="turn-active-badge" [class.self]="isCurrentPlayer(player.id)">
+                      {{ getTurnBadgeText(player) }}
+                    </div>
+                  }
+
+                  <div class="canvas-wrapper" [style.border-color]="isDrawingEnabled(player.id) ? getPlayerColor(player.id) : 'transparent'">
+                    <app-canvas
+                      [strokes]="getStrokesForPlayer(player.id)"
+                      [drawingEnabled]="isDrawingEnabled(player.id)"
+                      (strokeComplete)="onStrokeComplete($event)"
+                    />
+                  </div>
+
+                  <!-- Vote button (during voting phase, under each player's canvas) -->
+                  @if (game.canVoteNow() && !isCurrentPlayer(player.id)) {
+                    <button
+                      class="vote-btn"
+                      [attr.id]="'vote-' + player.id"
+                      (click)="vote(player.id)"
+                    >
+                      🗳️ Votar como impostor
+                    </button>
+                  }
+
+                  @if (state.yourVoteTargetPlayerId === player.id) {
+                    <div class="voted-indicator">✓ Tu voto</div>
+                  }
+                } @else {
+                  <div class="empty-slot">
+                    <span class="empty-icon">👤</span>
+                    <span class="empty-text">Esperando jugador</span>
+                  </div>
+                }
+              </article>
+            }
+          </section>
+
+          <!-- Sidebar -->
+          <aside class="sidebar">
+            <!-- Voting Status -->
+            @if (state.phase === 'VOTING') {
+              <div class="sidebar-card glass-panel">
+                <h3 class="sidebar-title">🗳️ Votación</h3>
+                <div class="vote-progress">
+                  <div class="vote-progress-bar">
+                    <div class="vote-progress-fill" [style.width.%]="(state.totalVotesThisRound / state.totalPlayers) * 100"></div>
+                  </div>
+                  <span class="vote-count">{{ votingProgress() }} votos</span>
+                </div>
+                @if (state.yourVoteTargetPlayerId) {
+                  <p class="voted-msg">✅ Ya has votado</p>
+                }
+              </div>
+            }
+
+            <!-- Leaderboard -->
+            <div class="sidebar-card glass-panel">
+              <h3 class="sidebar-title">🏆 Clasificación</h3>
+              <ol class="leaderboard-list">
+                @for (player of game.leaderboard(); track trackLeaderboard($index, player)) {
+                  <li class="lb-item" [class.is-you]="isCurrentPlayer(player.id)">
+                    <span class="lb-rank">{{ $index + 1 }}</span>
+                    <div class="lb-avatar" [style.background]="getPlayerColor(player.id)">
                       {{ getPlayerInitial(player.name) }}
                     </div>
-                    <span class="card-player-name">{{ player.name }}</span>
-                    @if (isCurrentPlayer(player.id)) {
-                      <span class="you-badge">TÚ</span>
-                    }
-                  </div>
-                  <span class="card-score">{{ player.score }} pts</span>
-                </header>
-
-                @if (isActiveTurn(player.id)) {
-                  <div class="turn-active-badge" [class.self]="isCurrentPlayer(player.id)">
-                    {{ getTurnBadgeText(player) }}
-                  </div>
+                    <span class="lb-name">{{ player.name }}</span>
+                    <span class="lb-score">{{ player.score }}</span>
+                  </li>
                 }
+              </ol>
+            </div>
 
-                <div class="canvas-wrapper" [style.border-color]="isDrawingEnabled(player.id) ? getPlayerColor(player.id) : 'transparent'">
-                  <app-canvas
-                    [strokes]="getStrokesForPlayer(player.id)"
-                    [drawingEnabled]="isDrawingEnabled(player.id)"
-                    (strokeComplete)="onStrokeComplete($event)"
-                  />
-                </div>
-
-                <!-- Vote button (during voting phase, under each player's canvas) -->
-                @if (game.canVoteNow() && !isCurrentPlayer(player.id)) {
-                  <button
-                    class="vote-btn"
-                    [attr.id]="'vote-' + player.id"
-                    (click)="vote(player.id)"
-                  >
-                    🗳️ Votar como impostor
-                  </button>
-                }
-
-                @if (state.yourVoteTargetPlayerId === player.id) {
-                  <div class="voted-indicator">✓ Tu voto</div>
-                }
-              } @else {
-                <div class="empty-slot">
-                  <span class="empty-icon">👤</span>
-                  <span class="empty-text">Esperando jugador</span>
-                </div>
-              }
-            </article>
-          }
-        </section>
-
-        <!-- Sidebar -->
-        <aside class="sidebar">
-          <!-- Voting Status -->
-          @if (state.phase === 'VOTING' || (state.gameMode === 'TURN_BASED' && state.phase === 'DRAWING')) {
-            <div class="sidebar-card glass-panel">
-              <h3 class="sidebar-title">🗳️ Votación</h3>
-              <div class="vote-progress">
-                <div class="vote-progress-bar">
-                  <div class="vote-progress-fill" [style.width.%]="(state.totalVotesThisRound / state.totalPlayers) * 100"></div>
-                </div>
-                <span class="vote-count">{{ votingProgress() }} votos</span>
+            <!-- Game mode info -->
+            <div class="sidebar-card glass-panel mode-info">
+              <span class="mode-badge">👥 Simultáneo</span>
+              <div class="ws-status" [class.connected]="game.wsConnected()" [class.fallback]="game.wsFallbackMode()" [attr.title]="game.wsLastError() || null">
+                <span class="ws-dot"></span>
+                {{ game.wsStatusLabel() }}
               </div>
-              @if (state.yourVoteTargetPlayerId) {
-                <p class="voted-msg">✅ Ya has votado</p>
-              }
-
-              @if (state.gameMode === 'TURN_BASED') {
-                <p class="voting-open-note">Votación sin límite de tiempo.</p>
-              }
-
-              @if (game.canHostSkipVoting()) {
-                <button class="skip-vote-btn" (click)="skipVoting()">⏭️ Omitir votación</button>
+              @if (!game.wsConnected() && game.wsLastError()) {
+                <span class="ws-detail">{{ game.wsLastError() }}</span>
               }
             </div>
-          }
-
-          <!-- Leaderboard -->
-          <div class="sidebar-card glass-panel">
-            <h3 class="sidebar-title">🏆 Clasificación</h3>
-            <ol class="leaderboard-list">
-              @for (player of game.leaderboard(); track trackLeaderboard($index, player)) {
-                <li class="lb-item" [class.is-you]="isCurrentPlayer(player.id)">
-                  <span class="lb-rank">{{ $index + 1 }}</span>
-                  <div class="lb-avatar" [style.background]="getPlayerColor(player.id)">
-                    {{ getPlayerInitial(player.name) }}
-                  </div>
-                  <span class="lb-name">{{ player.name }}</span>
-                  <span class="lb-score">{{ player.score }}</span>
-                </li>
-              }
-            </ol>
-          </div>
-
-          <!-- Game mode info -->
-          <div class="sidebar-card glass-panel mode-info">
-            <span class="mode-badge">{{ state.gameMode === 'SIMULTANEOUS' ? '👥 Simultáneo' : '🔄 Por turnos' }}</span>
-            <div class="ws-status" [class.connected]="game.wsConnected()" [class.fallback]="game.wsFallbackMode()" [attr.title]="game.wsLastError() || null">
-              <span class="ws-dot"></span>
-              {{ game.wsStatusLabel() }}
-            </div>
-            @if (!game.wsConnected() && game.wsLastError()) {
-              <span class="ws-detail">{{ game.wsLastError() }}</span>
-            }
-          </div>
-        </aside>
-      </div>
+          </aside>
+        </div>
+      }
     }
 
     <!-- ═══ ROLE REVEAL OVERLAY ═══ -->

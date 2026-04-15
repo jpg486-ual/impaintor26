@@ -2,13 +2,15 @@
 
 ## Resumen
 
-El modo `TURN_BASED` permite que solo un jugador dibuje cada vez, con rotación de turno automática entre todos los jugadores de la sala.
+El modo `TURN_BASED` permite que solo un jugador dibuje cada vez, con rotación de turno automática entre todos los jugadores de la sala y un canvas único principal.
 
 ## Reglas
 
 - El host elige el modo al crear sala: `SIMULTANEOUS` o `TURN_BASED`.
 - En `TURN_BASED`, cada turno individual usa `roundDurationSeconds` como duración máxima de dibujado para el jugador activo.
+- En `TURN_BASED`, el frontend muestra un **canvas grande compartido** para toda la sala.
 - Solo el jugador con `activeDrawerPlayerId` puede dibujar en ese instante.
+- El resto de jugadores observa en tiempo real los trazos del jugador activo en ese mismo canvas.
 - El orden de turnos se aleatoriza en cada ronda.
 - En cada inicio de turno se limpian los trazos visibles del canvas para que el jugador activo dibuje desde cero.
 - En `TURN_BASED`, la votación está disponible durante `DRAWING` (no espera a una fase separada de `VOTING`).
@@ -52,4 +54,4 @@ Si no se envía `gameMode`, se usa `SIMULTANEOUS` por defecto.
    - restricción de dibujo solo para turno activo,
   - rotación de turnos y limpieza de canvas al inicio de turno.
 2. Se implementó la lógica backend para satisfacer esos tests.
-3. Se actualizó frontend para exponer señalización de turno activo y control de omisión de votación para host.
+3. Se actualizó frontend para exponer canvas único de turno activo, señalización de turno y control de omisión de votación para host.

@@ -190,6 +190,29 @@ class GameServiceTurnModeTests {
     }
 
     @Test
+    void turnMode_observersSeeSharedTurnCanvasStrokes() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("HostCanvas", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        GameResponses.RoomJoinResponse p2 = gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P2Canvas"));
+        gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P3Canvas"));
+
+        gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+
+        GameResponses.GameStateResponse state = gameService.getState(host.roomCode(), host.playerId());
+        long activeDrawer = state.activeDrawerPlayerId();
+
+        gameService.addStroke(host.roomCode(), new GameRequests.AddStrokeRequest(
+                activeDrawer,
+                List.of(new GameRequests.StrokePoint(40, 40), new GameRequests.StrokePoint(120, 120))));
+
+        long observerId = p2.playerId() == activeDrawer ? host.playerId() : p2.playerId();
+        GameResponses.GameStateResponse observerState = gameService.getState(host.roomCode(), observerId);
+
+        assertThat(observerState.strokes()).hasSize(1);
+        assertThat(observerState.strokes().get(0).playerId()).isEqualTo(activeDrawer);
+    }
+
+    @Test
     void vote_isIdempotent_doesNotThrowOnDuplicateVote() {
         GameResponses.RoomJoinResponse host = gameService.createRoom(
                 new GameRequests.CreateRoomRequest("Host4", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
