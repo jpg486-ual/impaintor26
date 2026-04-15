@@ -48,6 +48,11 @@ Aplicación multijugador con interfaz gráfica basada en mecánicas de deducció
 - `GET /api/rooms/{roomCode}/state?playerId={id}` estado de partida
 - `POST /api/rooms/{roomCode}/strokes` enviar trazo
 - `POST /api/rooms/{roomCode}/votes` votar
+- `POST /api/matchmaking/public/join` entrar a cola pública rankeada
+- `POST /api/matchmaking/public/leave` salir de cola pública rankeada
+- `GET /api/matchmaking/public/status?userId={id}` estado de cola rankeada
+
+> Nota fase 2 ELO: la cola rankeada ya calcula expansión de ventana ELO (`±100` cada `10s`) y persiste tickets de cola. La autenticación/JWT llegará en la siguiente fase; por ahora estas rutas operan con `userId` de cuenta existente.
 
 ### Arranque local con Docker
 
