@@ -27,6 +27,7 @@ import com.example.demo.game.model.GameMode;
 import com.example.demo.game.model.GamePhase;
 import com.example.demo.game.model.GamePlayer;
 import com.example.demo.game.model.GameRoom;
+import com.example.demo.game.model.GameRoomType;
 import com.example.demo.game.model.GameVote;
 import com.example.demo.game.repository.DrawingStrokeRepository;
 import com.example.demo.game.repository.GamePlayerRepository;
@@ -94,6 +95,8 @@ public class GameService {
         room.setThemesCsv(String.join(",", themes));
         room.setCurrentRound(0);
         room.setGameMode(request.gameMode() == null ? GameMode.SIMULTANEOUS : request.gameMode());
+        room.setRoomType(GameRoomType.PRIVATE_UNRANKED);
+        room.setRankedMatchId(null);
         room.setPhase(GamePhase.WAITING);
         room.setActiveDrawerTurnIndex(0);
         room.setTurnsCompletedInRound(0);
@@ -104,6 +107,7 @@ public class GameService {
         player.setRoomCode(room.getCode());
         player.setName(normalizedName);
         player.setScore(0);
+        player.setUserId(null);
         playerRepository.save(player);
 
         return new GameResponses.RoomJoinResponse(room.getCode(), player.getId(), true);
@@ -130,6 +134,7 @@ public class GameService {
         player.setRoomCode(room.getCode());
         player.setName(normalizedName);
         player.setScore(0);
+        player.setUserId(null);
         playerRepository.save(player);
 
         broadcastState(room.getCode());

@@ -35,6 +35,13 @@ public class GameRoom {
     @Column(nullable = false)
     private GameMode gameMode;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    private GameRoomType roomType;
+
+    @Column(nullable = true)
+    private Long rankedMatchId;
+
     @Column(nullable = false, length = 512)
     private String themesCsv;
 
@@ -77,6 +84,9 @@ public class GameRoom {
         Instant now = Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
+        if (this.roomType == null) {
+            this.roomType = GameRoomType.PRIVATE_UNRANKED;
+        }
     }
 
     @PreUpdate
@@ -138,6 +148,22 @@ public class GameRoom {
 
     public void setGameMode(GameMode gameMode) {
         this.gameMode = gameMode;
+    }
+
+    public GameRoomType getRoomType() {
+        return roomType;
+    }
+
+    public void setRoomType(GameRoomType roomType) {
+        this.roomType = roomType;
+    }
+
+    public Long getRankedMatchId() {
+        return rankedMatchId;
+    }
+
+    public void setRankedMatchId(Long rankedMatchId) {
+        this.rankedMatchId = rankedMatchId;
     }
 
     public int getCurrentRound() {

@@ -30,6 +30,9 @@ public class GamePlayer {
     @Column(nullable = false)
     private int score;
 
+    @Column(nullable = true)
+    private Long userId;
+
     @Column(nullable = false)
     private Instant joinedAt;
 
@@ -64,5 +67,13 @@ public class GamePlayer {
 
     public void setScore(int score) {
         this.score = score;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 }

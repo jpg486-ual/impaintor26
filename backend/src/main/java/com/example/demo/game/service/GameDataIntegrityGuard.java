@@ -96,6 +96,21 @@ public class GameDataIntegrityGuard {
                 "game_rooms",
                 "turns_completed_in_round",
                 "ALTER TABLE game_rooms ADD COLUMN IF NOT EXISTS turns_completed_in_round INTEGER NOT NULL DEFAULT 0");
+        ensureColumn(
+                issues,
+                "game_rooms",
+                "room_type",
+                "ALTER TABLE game_rooms ADD COLUMN IF NOT EXISTS room_type VARCHAR(32) NOT NULL DEFAULT 'PRIVATE_UNRANKED'");
+        ensureColumn(
+                issues,
+                "game_rooms",
+                "ranked_match_id",
+                "ALTER TABLE game_rooms ADD COLUMN IF NOT EXISTS ranked_match_id BIGINT");
+        ensureColumn(
+                issues,
+                "game_players",
+                "user_id",
+                "ALTER TABLE game_players ADD COLUMN IF NOT EXISTS user_id BIGINT");
 
         return issues;
     }
