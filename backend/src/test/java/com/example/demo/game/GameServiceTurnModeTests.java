@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.demo.game.dto.GameRequests;
@@ -237,6 +238,48 @@ class GameServiceTurnModeTests {
 
         gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
         gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+    }
+
+    @Test
+    void cleanup_keepsRecentlyFinishedTurnRoom() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("HostKeep", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        GameRoom room = roomRepository.findByCode(host.roomCode()).orElseThrow();
+        room.setPhase(GamePhase.FINISHED);
+        room.setFinishedAt(Instant.now().minusSeconds(5));
+        roomRepository.save(room);
+
+        gameService.cleanupFinishedRooms();
+
+        assertThat(roomRepository.findByCode(host.roomCode())).isPresent();
+    }
+
+    @Test
+    void cleanup_removesOldFinishedTurnRoom() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("HostDrop", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        GameRoom room = roomRepository.findByCode(host.roomCode()).orElseThrow();
+        room.setPhase(GamePhase.FINISHED);
+        room.setFinishedAt(Instant.now().minusSeconds(90));
+        roomRepository.save(room);
+
+        gameService.cleanupFinishedRooms();
+
+        assertThat(roomRepository.findByCode(host.roomCode())).isEmpty();
+    }
+
+    @Test
+    void cleanup_removesStaleTurnRoomWithoutFinishedState() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("HostStale", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        GameRoom room = roomRepository.findByCode(host.roomCode()).orElseThrow();
+        room.setPhase(GamePhase.DRAWING);
+        ReflectionTestUtils.setField(room, "createdAt", Instant.now().minusSeconds(3700));
+        roomRepository.save(room);
+
+        gameService.cleanupFinishedRooms();
+
+        assertThat(roomRepository.findByCode(host.roomCode())).isEmpty();
     }
 
     private void forcePhaseTimeout(String roomCode) {

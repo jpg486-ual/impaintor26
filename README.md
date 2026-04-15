@@ -23,6 +23,11 @@ Aplicación multijugador con interfaz gráfica basada en mecánicas de deducció
 - Base de datos: PostgreSQL 16 (`localhost:5432`)
 - Mensajería en tiempo real: STOMP relay sobre RabbitMQ (`localhost:61613`, panel `http://localhost:15672`)
 
+### Documentación técnica
+
+- [RabbitMQ en Impaintor](docs/rabbitmq-en-impaintor.md)
+- [Modo por turnos](docs/turn-based-mode.md)
+
 ### Flujo del juego
 
 - Un jugador crea sala y configura duración de dibujo, duración de votación, rondas y temas.

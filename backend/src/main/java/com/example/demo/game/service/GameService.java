@@ -277,12 +277,9 @@ public class GameService {
 
     @Transactional
     public void cleanupFinishedRooms() {
+        Instant now = Instant.now();
         List<GameRoom> finishedRooms = roomRepository.findAll().stream()
-                // el modo por turnos tiene tiempo de votación indefinida, así que se considera terminada tras una hora de inactividad
-                .filter(room -> room.getGameMode() == GameMode.TURN_BASED || room.getPhase() == GamePhase.FINISHED)
-                .filter(room -> (room.getGameMode() == GameMode.TURN_BASED && room.getCreatedAt().isBefore(Instant.now().minusSeconds(ROOM_TTL_SECONDS))) || room.getFinishedAt() != null)
-                .filter(room -> room.getGameMode() == GameMode.TURN_BASED ||room.getFinishedAt()
-                        .isBefore(Instant.now().minusSeconds(ROOM_TTL_AFTER_FINISH_SECONDS)))
+                .filter(room -> shouldDeleteRoom(room, now))
                 .toList();
 
         for (GameRoom room : finishedRooms) {
@@ -292,6 +289,17 @@ public class GameService {
             playerRepository.deleteByRoomCode(code);
             roomRepository.delete(room);
         }
+    }
+
+    private boolean shouldDeleteRoom(GameRoom room, Instant now) {
+        if (room.getPhase() == GamePhase.FINISHED && room.getFinishedAt() != null) {
+            return room.getFinishedAt().isBefore(now.minusSeconds(ROOM_TTL_AFTER_FINISH_SECONDS));
+        }
+
+        // Turn mode can remain in DRAWING while waiting for votes; clear stale rooms after hard TTL.
+        return room.getGameMode() == GameMode.TURN_BASED
+                && room.getCreatedAt() != null
+                && room.getCreatedAt().isBefore(now.minusSeconds(ROOM_TTL_SECONDS));
     }
 
     public void broadcastState(String roomCode) {
@@ -311,11 +319,15 @@ public class GameService {
             // Send personalized state to each player
             for (GamePlayer player : players) {
                 GameResponses.GameStateResponse state = buildStateForPlayer(room, player, players, strokes, votes);
-                messaging.convertAndSend("/topic/room/" + roomCode + "/player/" + player.getId(), state);
+                messaging.convertAndSend(playerTopicDestination(roomCode, player.getId()), state);
             }
         } catch (Exception ignored) {
             // Broadcasting errors should not affect game logic
         }
+    }
+
+    private String playerTopicDestination(String roomCode, long playerId) {
+        return "/topic/room." + roomCode + ".player." + playerId;
     }
 
     private GameResponses.GameStateResponse buildStateResponse(GameRoom room, GamePlayer viewer) {

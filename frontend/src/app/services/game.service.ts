@@ -288,7 +288,7 @@ export class GameService {
         this.state.set(state);
         this.updateCountdown(state.phaseEndsAt);
       },
-      error: (e) => this.handleError(e),
+      error: (e) => this.handleStateFetchError(e),
     });
   }
 
@@ -370,7 +370,7 @@ export class GameService {
         this.wsFallbackMode.set(false);
         this.wsFailedAttempts = 0;
         this.wsLastError.set('');
-        this.stompClient?.subscribe(`/topic/room/${config.roomCode}/player/${config.playerId}`, (msg: IMessage) => {
+        this.stompClient?.subscribe(this.buildPlayerTopic(config.roomCode, config.playerId), (msg: IMessage) => {
           try {
             const state: GameState = JSON.parse(msg.body);
             this.state.set(state);
@@ -511,6 +511,19 @@ export class GameService {
   private buildNativeWsUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}${this.wsBase}`;
+  }
+
+  private buildPlayerTopic(roomCode: string, playerId: number): string {
+    return `/topic/room.${roomCode}.player.${playerId}`;
+  }
+
+  private handleStateFetchError(error: HttpErrorResponse): void {
+    if (error.status === 404 && this.roomCode()) {
+      this.showError('La sala ha finalizado o ya no existe.');
+      this.leaveRoom();
+      return;
+    }
+    this.handleError(error);
   }
 
   private handleError(error: HttpErrorResponse): void {
