@@ -31,6 +31,7 @@ public final class GameResponses {
             List<StrokeView> strokes,
             Long yourPlayerId,
             String yourWord,
+            List<String> impostorHints,
             boolean youAreImpostor,
             boolean youAreHost,
             Long impostorRevealedPlayerId,

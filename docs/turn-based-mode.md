@@ -13,6 +13,8 @@ El modo `TURN_BASED` permite que solo un jugador dibuje cada vez, con rotación 
 - El resto de jugadores observa en tiempo real los trazos del jugador activo en ese mismo canvas.
 - El orden de turnos se aleatoriza en cada ronda.
 - En cada inicio de turno se limpian los trazos visibles del canvas para que el jugador activo dibuje desde cero.
+- El impostor recibe hasta 3 pistas semanticas de apoyo (Datamuse `rel_trg` usando la palabra real como semilla), visibles en el mismo bloque donde el resto ve la palabra.
+- Si Datamuse falla o no entrega suficientes resultados validos, el impostor ve el mensaje de respaldo: `no tienes pistas :(`.
 - En `TURN_BASED`, la votación está disponible durante `DRAWING` (no espera a una fase separada de `VOTING`).
 - Mientras no voten todos, los turnos de dibujo siguen rotando uno a uno de forma indefinida dentro de la ronda.
 - El host puede forzar el cierre de la ronda en casos excepcionales con `POST /api/rooms/{roomCode}/votes/skip`.

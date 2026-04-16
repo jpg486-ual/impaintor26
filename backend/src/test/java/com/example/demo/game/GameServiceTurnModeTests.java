@@ -48,6 +48,37 @@ class GameServiceTurnModeTests {
     }
 
     @Test
+    void turnMode_exposesHintsOnlyToImpostorInWordBarPhases() {
+        GameResponses.RoomJoinResponse host = gameService.createRoom(
+                new GameRequests.CreateRoomRequest("HostHints", 60, 20, 3, List.of("animales"), GameMode.TURN_BASED));
+        GameResponses.RoomJoinResponse p2 = gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P2Hints"));
+        GameResponses.RoomJoinResponse p3 = gameService.joinRoom(host.roomCode(), new GameRequests.JoinRoomRequest("P3Hints"));
+
+        gameService.startGame(host.roomCode(), new GameRequests.StartGameRequest(host.playerId()));
+
+        List<GameResponses.GameStateResponse> states = List.of(
+                gameService.getState(host.roomCode(), host.playerId()),
+                gameService.getState(host.roomCode(), p2.playerId()),
+                gameService.getState(host.roomCode(), p3.playerId()));
+
+        GameResponses.GameStateResponse impostorState = states.stream()
+                .filter(GameResponses.GameStateResponse::youAreImpostor)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(impostorState.phase()).isIn(GamePhase.DRAWING, GamePhase.VOTING);
+        assertThat(impostorState.yourWord()).isNull();
+        assertThat(impostorState.impostorHints()).containsExactly("no tienes pistas :(");
+
+        states.stream()
+                .filter(s -> !s.youAreImpostor())
+                .forEach(s -> {
+                    assertThat(s.yourWord()).isNotBlank();
+                    assertThat(s.impostorHints()).isEmpty();
+                });
+    }
+
+    @Test
     void turnMode_turnsKeepRotatingWithoutEnteringVotingPhase() {
         GameResponses.RoomJoinResponse host = gameService.createRoom(
                 new GameRequests.CreateRoomRequest("HostV", 45, 25, 3, List.of("animales"), GameMode.TURN_BASED));

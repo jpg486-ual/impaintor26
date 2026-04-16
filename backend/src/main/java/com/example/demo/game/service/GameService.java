@@ -53,6 +53,7 @@ public class GameService {
     private static final int RANKED_VOTING_DURATION_SECONDS = 25;
     private static final int RANKED_MAX_ROUNDS = 5;
     private static final List<String> RANKED_THEMES = List.of("animales", "comida", "deportes", "objetos", "profesiones");
+    private static final String HINT_SEPARATOR = "\n";
 
     private static final Map<String, List<String>> WORDS_BY_THEME = Map.of(
             "animales",
@@ -77,6 +78,7 @@ public class GameService {
     private final GameVoteRepository voteRepository;
     private final RankedMatchRepository rankedMatchRepository;
     private final RatingService ratingService;
+    private final ImpostorHintService impostorHintService;
     private final SimpMessagingTemplate messaging;
     private final SecureRandom random = new SecureRandom();
 
@@ -90,6 +92,7 @@ public class GameService {
             GameVoteRepository voteRepository,
             RankedMatchRepository rankedMatchRepository,
             RatingService ratingService,
+            ImpostorHintService impostorHintService,
             SimpMessagingTemplate messaging) {
         this.roomRepository = roomRepository;
         this.playerRepository = playerRepository;
@@ -97,6 +100,7 @@ public class GameService {
         this.voteRepository = voteRepository;
         this.rankedMatchRepository = rankedMatchRepository;
         this.ratingService = ratingService;
+        this.impostorHintService = impostorHintService;
         this.messaging = messaging;
     }
 
@@ -430,10 +434,13 @@ public class GameService {
         }
 
         String yourWord = null;
+        List<String> impostorHints = List.of();
         boolean isImpostor = viewer.getId().equals(room.getImpostorPlayerId());
         if (room.getPhase() == GamePhase.DRAWING || room.getPhase() == GamePhase.VOTING) {
             if (!isImpostor) {
                 yourWord = room.getCurrentWord();
+            } else {
+                impostorHints = decodeHints(room.getImpostorHintsCsv());
             }
         }
 
@@ -455,6 +462,7 @@ public class GameService {
                         .toList(),
                 viewer.getId(),
                 yourWord,
+                impostorHints,
                 isImpostor,
                 viewer.getName().equals(room.getHostName()),
                 impostorReveal,
@@ -514,6 +522,7 @@ public class GameService {
         GamePlayer impostor = players.get(random.nextInt(players.size()));
         room.setImpostorPlayerId(impostor.getId());
         room.setCurrentWord(pickWord(room.getThemesCsv()));
+        room.setImpostorHintsCsv(encodeHints(impostorHintService.generateHints(room.getCurrentWord())));
         room.setTurnsCompletedInRound(0);
 
         if (room.getGameMode() == GameMode.TURN_BASED) {
@@ -554,6 +563,29 @@ public class GameService {
         room.setActiveDrawerTurnIndex(turnOrderIndex);
         room.setActiveDrawerPlayerId(turnOrder.get(turnOrderIndex).getId());
         room.setPhaseEndsAt(now.plusSeconds(room.getRoundDurationSeconds()));
+    }
+
+    private String encodeHints(List<String> hints) {
+        if (hints == null || hints.isEmpty()) {
+            return null;
+        }
+        return hints.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .limit(3)
+                .collect(Collectors.joining(HINT_SEPARATOR));
+    }
+
+    private List<String> decodeHints(String rawHints) {
+        if (rawHints == null || rawHints.isBlank()) {
+            return List.of();
+        }
+        return List.of(rawHints.split(HINT_SEPARATOR)).stream()
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .limit(3)
+                .toList();
     }
 
     private void beginVotingPhase(GameRoom room, Instant now) {

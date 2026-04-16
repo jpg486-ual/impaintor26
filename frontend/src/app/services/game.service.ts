@@ -41,6 +41,7 @@ export interface GameState {
   strokes: StrokeView[];
   yourPlayerId: number;
   yourWord: string | null;
+  impostorHints: string[];
   youAreImpostor: boolean;
   youAreHost: boolean;
   impostorRevealedPlayerId: number | null;

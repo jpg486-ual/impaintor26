@@ -52,7 +52,19 @@
         @if (state.youAreImpostor) {
           <div class="role-info impostor">
             <span class="role-icon">🕵️</span>
-            <span class="role-text">Eres el <strong>IMPOSTOR</strong> — improvisa sin levantar sospechas</span>
+            <div class="role-copy">
+              <span class="role-text">Eres el <strong>IMPOSTOR</strong> — improvisa sin levantar sospechas</span>
+              @if (state.impostorHints.length > 0) {
+                <div class="impostor-hints">
+                  <span class="hints-label">Pistas:</span>
+                  <ul class="hints-list">
+                    @for (hint of state.impostorHints; track hint + '-' + $index) {
+                      <li>{{ hint }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+            </div>
           </div>
         } @else {
           <div class="role-info painter">
@@ -359,6 +371,16 @@
             <div class="reveal-icon">🕵️</div>
             <h2 class="reveal-title impostor-title">¡Eres el IMPOSTOR!</h2>
             <p class="reveal-desc">No tienes palabra. Observa e improvisa sin levantar sospechas.</p>
+            @if (state.impostorHints.length > 0) {
+              <div class="overlay-hints">
+                <span class="overlay-hints-label">Pistas de apoyo:</span>
+                <ul class="overlay-hints-list">
+                  @for (hint of state.impostorHints; track hint + '-' + $index) {
+                    <li>{{ hint }}</li>
+                  }
+                </ul>
+              </div>
+            }
           } @else {
             <div class="reveal-icon">🎨</div>
             <h2 class="reveal-title painter-title">Tu palabra es:</h2>

@@ -64,6 +64,9 @@ public class GameRoom {
     @Column(nullable = true)
     private Long impostorPlayerId;
 
+    @Column(nullable = true, length = 512)
+    private String impostorHintsCsv;
+
     @Column(nullable = true)
     private Long activeDrawerPlayerId;
 
@@ -216,6 +219,14 @@ public class GameRoom {
 
     public void setImpostorPlayerId(Long impostorPlayerId) {
         this.impostorPlayerId = impostorPlayerId;
+    }
+
+    public String getImpostorHintsCsv() {
+        return impostorHintsCsv;
+    }
+
+    public void setImpostorHintsCsv(String impostorHintsCsv) {
+        this.impostorHintsCsv = impostorHintsCsv;
     }
 
     public Long getActiveDrawerPlayerId() {
