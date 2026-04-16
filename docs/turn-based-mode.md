@@ -45,6 +45,15 @@ El modo `TURN_BASED` permite que solo un jugador dibuje cada vez, con rotación 
 
 Si no se envía `gameMode`, se usa `SIMULTANEOUS` por defecto.
 
+## Ranked público (TURN_BASED)
+
+- Las partidas ranked públicas usan exclusivamente `TURN_BASED`.
+- El matchmaking empareja por ELO y amplía la ventana de búsqueda en bloques de `±100` cada `10s`.
+- Cuando se forma un grupo compatible, cada ticket pasa a `MATCH_PENDING_CONFIRMATION`.
+- La confirmación del match se realiza con `POST /api/matchmaking/public/confirm` y ventana de `15s`.
+- Si todos confirman dentro del tiempo, se crea la sala `PUBLIC_RANKED` y el ticket pasa a `MATCHED` con `matchedRoomCode`.
+- Si vence la ventana, el intento pasa a estado terminal `EXPIRED`.
+
 ## Enfoque TDD aplicado
 
 1. Se añadieron tests de servicio (`GameServiceTurnModeTests`) para definir:

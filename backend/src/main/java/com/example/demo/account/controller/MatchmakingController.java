@@ -40,6 +40,13 @@ public class MatchmakingController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/confirm")
+    public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> confirmQueueMatch(
+            @Valid @RequestBody MatchmakingDtos.ConfirmPublicQueueMatchRequest request) {
+        MatchmakingDtos.PublicQueueStatusResponse response = rankedMatchmakingService.confirmMatch(request.userId());
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/status")
     public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> queueStatus(
             @RequestParam @Min(1) long userId) {

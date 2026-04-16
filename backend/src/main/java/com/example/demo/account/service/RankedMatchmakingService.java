@@ -3,9 +3,11 @@ package com.example.demo.account.service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ public class RankedMatchmakingService {
     private static final int BASE_ELO_WINDOW = 100;
     private static final int WINDOW_EXPANSION_STEP = 100;
     private static final int WINDOW_EXPANSION_INTERVAL_SECONDS = 10;
+    private static final int MATCH_CONFIRMATION_WINDOW_SECONDS = 15;
     private static final int MATCH_SIZE = 3;
 
     private final AppUserRepository userRepository;
@@ -59,6 +62,19 @@ public class RankedMatchmakingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Las partidas ranked solo permiten modo por turnos");
         }
         validateActiveUser(userId);
+
+        Instant now = Instant.now();
+        RankedQueueTicket pendingTicket = queueTicketRepository
+                .findByUserIdAndStatus(userId, RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION)
+                .orElse(null);
+        if (pendingTicket != null) {
+            if (isPendingConfirmationExpired(pendingTicket, now)) {
+                expirePendingMatch(pendingTicket.getRankedMatchId(), now);
+                return getStatus(userId);
+            }
+            return toStatusResponse(pendingTicket, true, now);
+        }
+
         UserRankProfile profile = ratingService.getOrCreateProfile(userId);
 
         RankedQueueTicket ticket = queueTicketRepository
@@ -69,8 +85,10 @@ public class RankedMatchmakingService {
             ticket.setRequestedGameMode(gameMode);
         }
         ticket.setMatchedRoomCode(null);
+        ticket.setRankedMatchId(null);
+        ticket.setConfirmationDeadlineAt(null);
+        ticket.setConfirmedAt(null);
 
-        Instant now = Instant.now();
         refreshSearchRange(ticket, now);
         queueTicketRepository.save(ticket);
         return toStatusResponse(ticket, true, now);
@@ -78,6 +96,21 @@ public class RankedMatchmakingService {
 
     @Transactional
     public void leaveQueue(long userId) {
+        Instant now = Instant.now();
+        RankedQueueTicket pendingTicket = queueTicketRepository
+                .findByUserIdAndStatus(userId, RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION)
+                .orElse(null);
+
+        if (pendingTicket != null) {
+            if (pendingTicket.getRankedMatchId() != null) {
+                cancelPendingMatch(pendingTicket.getRankedMatchId(), RankedQueueTicketStatus.CANCELLED, now);
+            } else {
+                pendingTicket.setStatus(RankedQueueTicketStatus.CANCELLED);
+                queueTicketRepository.save(pendingTicket);
+            }
+            return;
+        }
+
         RankedQueueTicket ticket = queueTicketRepository
                 .findByUserIdAndStatus(userId, RankedQueueTicketStatus.QUEUED)
                 .orElse(null);
@@ -92,12 +125,24 @@ public class RankedMatchmakingService {
 
     @Transactional
     public MatchmakingDtos.PublicQueueStatusResponse getStatus(long userId) {
+        Instant now = Instant.now();
+        RankedQueueTicket pendingTicket = queueTicketRepository
+                .findByUserIdAndStatus(userId, RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION)
+                .orElse(null);
+
+        if (pendingTicket != null) {
+            if (isPendingConfirmationExpired(pendingTicket, now)) {
+                expirePendingMatch(pendingTicket.getRankedMatchId(), now);
+            } else {
+                return toStatusResponse(pendingTicket, true, now);
+            }
+        }
+
         RankedQueueTicket queuedTicket = queueTicketRepository
                 .findByUserIdAndStatus(userId, RankedQueueTicketStatus.QUEUED)
                 .orElse(null);
 
         if (queuedTicket != null) {
-            Instant now = Instant.now();
             refreshSearchRange(queuedTicket, now);
             queueTicketRepository.save(queuedTicket);
             return toStatusResponse(queuedTicket, true, now);
@@ -106,14 +151,40 @@ public class RankedMatchmakingService {
         RankedQueueTicket latestTicket = queueTicketRepository.findFirstByUserIdOrderByUpdatedAtDesc(userId).orElse(null);
         if (latestTicket == null) {
             return new MatchmakingDtos.PublicQueueStatusResponse(
-                    false, null, userId, null, null, 0, null, null, 0, null, null);
+                    false, null, userId, null, null, 0, null, null, 0, null, null, null, null, false);
         }
-        return toStatusResponse(latestTicket, false, Instant.now());
+        return toStatusResponse(latestTicket, false, now);
+    }
+
+    @Transactional
+    public MatchmakingDtos.PublicQueueStatusResponse confirmMatch(long userId) {
+        Instant now = Instant.now();
+        RankedQueueTicket pendingTicket = queueTicketRepository
+                .findByUserIdAndStatus(userId, RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION)
+                .orElse(null);
+
+        if (pendingTicket == null) {
+            return getStatus(userId);
+        }
+
+        if (isPendingConfirmationExpired(pendingTicket, now)) {
+            expirePendingMatch(pendingTicket.getRankedMatchId(), now);
+            return getStatus(userId);
+        }
+
+        if (pendingTicket.getConfirmedAt() == null) {
+            pendingTicket.setConfirmedAt(now);
+            queueTicketRepository.save(pendingTicket);
+        }
+
+        finalizePendingMatchIfFullyConfirmed(pendingTicket.getRankedMatchId(), pendingTicket.getRequestedGameMode(), now);
+        return getStatus(userId);
     }
 
     @Transactional
     public int processQueueCycle() {
         Instant now = Instant.now();
+        expirePendingConfirmations(now);
         return processModeQueue(GameMode.TURN_BASED, now);
     }
 
@@ -144,7 +215,7 @@ public class RankedMatchmakingService {
                 return matchesCreated;
             }
 
-            if (createMatchForGroup(mode, maybeGroup.get())) {
+            if (openPendingConfirmationForGroup(mode, maybeGroup.get(), now)) {
                 matchesCreated++;
             }
         }
@@ -171,7 +242,7 @@ public class RankedMatchmakingService {
         return Optional.empty();
     }
 
-    private boolean createMatchForGroup(GameMode gameMode, List<RankedQueueTicket> group) {
+    private boolean openPendingConfirmationForGroup(GameMode gameMode, List<RankedQueueTicket> group, Instant now) {
         Map<Long, AppUser> usersById = new HashMap<>();
         List<AppUser> users = userRepository.findAllById(group.stream().map(RankedQueueTicket::getUserId).toList());
         for (AppUser user : users) {
@@ -193,10 +264,67 @@ public class RankedMatchmakingService {
         }
 
         RankedMatch rankedMatch = new RankedMatch();
-        rankedMatch.setStatus(RankedMatchStatus.PENDING_ROOM_ASSIGNMENT);
+        rankedMatch.setStatus(RankedMatchStatus.WAITING_CONFIRMATION);
         rankedMatch = rankedMatchRepository.save(rankedMatch);
 
-        List<GameService.RankedPlayerSeed> rankedPlayers = group.stream()
+        Instant confirmationDeadline = now.plusSeconds(MATCH_CONFIRMATION_WINDOW_SECONDS);
+        for (RankedQueueTicket ticket : group) {
+            ticket.setStatus(RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+            ticket.setRankedMatchId(rankedMatch.getId());
+            ticket.setMatchedRoomCode(null);
+            ticket.setConfirmationDeadlineAt(confirmationDeadline);
+            ticket.setConfirmedAt(null);
+        }
+        queueTicketRepository.saveAll(group);
+        return true;
+    }
+
+    private void finalizePendingMatchIfFullyConfirmed(Long rankedMatchId, GameMode gameMode, Instant now) {
+        if (rankedMatchId == null) {
+            return;
+        }
+
+        List<RankedQueueTicket> pendingTickets = queueTicketRepository
+                .findByRankedMatchIdAndStatusOrderByQueuedAtAsc(
+                        rankedMatchId,
+                        RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+        if (pendingTickets.size() != MATCH_SIZE) {
+            return;
+        }
+
+        if (pendingTickets.stream().anyMatch(ticket -> isPendingConfirmationExpired(ticket, now))) {
+            expirePendingMatch(rankedMatchId, now);
+            return;
+        }
+
+        if (pendingTickets.stream().anyMatch(ticket -> ticket.getConfirmedAt() == null)) {
+            return;
+        }
+
+        RankedMatch rankedMatch = rankedMatchRepository.findById(rankedMatchId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Partida ranked no encontrada"));
+        if (rankedMatch.getStatus() == RankedMatchStatus.IN_PROGRESS || rankedMatch.getStatus() == RankedMatchStatus.FINISHED) {
+            return;
+        }
+        rankedMatch.setStatus(RankedMatchStatus.PENDING_ROOM_ASSIGNMENT);
+        rankedMatchRepository.save(rankedMatch);
+
+        Map<Long, AppUser> usersById = new HashMap<>();
+        List<AppUser> users = userRepository.findAllById(pendingTickets.stream().map(RankedQueueTicket::getUserId).toList());
+        for (AppUser user : users) {
+            usersById.put(user.getId(), user);
+        }
+
+        boolean hasInvalidUser = pendingTickets.stream().anyMatch(ticket -> {
+            AppUser user = usersById.get(ticket.getUserId());
+            return user == null || user.getStatus() != UserStatus.ACTIVE;
+        });
+        if (hasInvalidUser) {
+            expirePendingMatch(rankedMatchId, now);
+            return;
+        }
+
+        List<GameService.RankedPlayerSeed> rankedPlayers = pendingTickets.stream()
                 .map(ticket -> {
                     AppUser user = usersById.get(ticket.getUserId());
                     return new GameService.RankedPlayerSeed(ticket.getUserId(), user.getUsername());
@@ -206,15 +334,68 @@ public class RankedMatchmakingService {
         String roomCode = gameService.createRankedRoom(rankedMatch.getId(), gameMode, rankedPlayers);
         rankedMatch.setRoomCode(roomCode);
         rankedMatch.setStatus(RankedMatchStatus.IN_PROGRESS);
-        rankedMatch.setStartedAt(Instant.now());
+        rankedMatch.setStartedAt(now);
         rankedMatchRepository.save(rankedMatch);
 
-        for (RankedQueueTicket ticket : group) {
+        for (RankedQueueTicket ticket : pendingTickets) {
             ticket.setStatus(RankedQueueTicketStatus.MATCHED);
             ticket.setMatchedRoomCode(roomCode);
         }
-        queueTicketRepository.saveAll(group);
-        return true;
+        queueTicketRepository.saveAll(pendingTickets);
+    }
+
+    private void expirePendingConfirmations(Instant now) {
+        List<RankedQueueTicket> expiredTickets = queueTicketRepository
+                .findByStatusAndConfirmationDeadlineAtBefore(
+                        RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION,
+                        now);
+        if (expiredTickets.isEmpty()) {
+            return;
+        }
+
+        Set<Long> processedMatchIds = new HashSet<>();
+        for (RankedQueueTicket ticket : expiredTickets) {
+            Long rankedMatchId = ticket.getRankedMatchId();
+            if (rankedMatchId == null) {
+                ticket.setStatus(RankedQueueTicketStatus.EXPIRED);
+                queueTicketRepository.save(ticket);
+                continue;
+            }
+            if (processedMatchIds.add(rankedMatchId)) {
+                expirePendingMatch(rankedMatchId, now);
+            }
+        }
+    }
+
+    private void expirePendingMatch(Long rankedMatchId, Instant now) {
+        cancelPendingMatch(rankedMatchId, RankedQueueTicketStatus.EXPIRED, now);
+    }
+
+    private void cancelPendingMatch(Long rankedMatchId, RankedQueueTicketStatus terminalStatus, Instant now) {
+        if (rankedMatchId == null) {
+            return;
+        }
+        List<RankedQueueTicket> pendingTickets = queueTicketRepository
+                .findByRankedMatchIdAndStatusOrderByQueuedAtAsc(
+                        rankedMatchId,
+                        RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+        for (RankedQueueTicket ticket : pendingTickets) {
+            ticket.setStatus(terminalStatus);
+            ticket.setConfirmationDeadlineAt(ticket.getConfirmationDeadlineAt() == null ? now : ticket.getConfirmationDeadlineAt());
+        }
+        queueTicketRepository.saveAll(pendingTickets);
+
+        rankedMatchRepository.findById(rankedMatchId).ifPresent(match -> {
+            if (match.getStatus() != RankedMatchStatus.FINISHED && match.getStatus() != RankedMatchStatus.IN_PROGRESS) {
+                match.setStatus(RankedMatchStatus.CANCELLED);
+                rankedMatchRepository.save(match);
+            }
+        });
+    }
+
+    private boolean isPendingConfirmationExpired(RankedQueueTicket ticket, Instant now) {
+        Instant deadline = ticket.getConfirmationDeadlineAt();
+        return deadline != null && !deadline.isAfter(now);
     }
 
     private void validateActiveUser(long userId) {
@@ -264,6 +445,9 @@ public class RankedMatchmakingService {
                 ticket.getLastSearchMaxElo(),
                 waitedSeconds,
                 ticket.getQueuedAt(),
-                ticket.getMatchedRoomCode());
+                ticket.getMatchedRoomCode(),
+                ticket.getRankedMatchId(),
+                ticket.getConfirmationDeadlineAt(),
+                ticket.getConfirmedAt() != null);
     }
 }

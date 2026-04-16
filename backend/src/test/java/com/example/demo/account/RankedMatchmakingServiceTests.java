@@ -14,9 +14,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.demo.account.dto.MatchmakingDtos;
 import com.example.demo.account.model.AppUser;
+import com.example.demo.account.model.RankedMatchStatus;
 import com.example.demo.account.model.RankedQueueTicket;
 import com.example.demo.account.model.RankedQueueTicketStatus;
 import com.example.demo.account.repository.AppUserRepository;
+import com.example.demo.account.repository.RankedMatchRepository;
 import com.example.demo.account.repository.RankedQueueTicketRepository;
 import com.example.demo.account.repository.UserRankProfileRepository;
 import com.example.demo.account.service.RankedMatchmakingService;
@@ -34,6 +36,9 @@ class RankedMatchmakingServiceTests {
 
     @Autowired
     private RankedQueueTicketRepository queueTicketRepository;
+
+    @Autowired
+    private RankedMatchRepository rankedMatchRepository;
 
     @Autowired
     private UserRankProfileRepository profileRepository;
@@ -104,7 +109,7 @@ class RankedMatchmakingServiceTests {
     }
 
     @Test
-    void getStatus_returnsMatchedRoomWhenUserHasBeenPaired() {
+    void getStatus_returnsPendingConfirmationWhenUserHasBeenPaired() {
         AppUser user1 = createUser("queue-match-1", "queue-match-1@example.com");
         AppUser user2 = createUser("queue-match-2", "queue-match-2@example.com");
         AppUser user3 = createUser("queue-match-3", "queue-match-3@example.com");
@@ -118,9 +123,64 @@ class RankedMatchmakingServiceTests {
         matchmakingService.processQueueCycle();
 
         MatchmakingDtos.PublicQueueStatusResponse status = matchmakingService.getStatus(user1.getId());
+        assertThat(status.queued()).isTrue();
+        assertThat(status.status()).isEqualTo(RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+        assertThat(status.confirmationDeadlineAt()).isNotNull();
+        assertThat(status.confirmed()).isFalse();
+        assertThat(status.matchedRoomCode()).isNull();
+    }
+
+    @Test
+    void confirmMatch_createsRankedRoomWhenEveryPlayerConfirms() {
+        AppUser user1 = createUser("queue-confirm-1", "queue-confirm-1@example.com");
+        AppUser user2 = createUser("queue-confirm-2", "queue-confirm-2@example.com");
+        AppUser user3 = createUser("queue-confirm-3", "queue-confirm-3@example.com");
+        ensureProfileElo(user1.getId(), 1200);
+        ensureProfileElo(user2.getId(), 1210);
+        ensureProfileElo(user3.getId(), 1220);
+
+        matchmakingService.enqueue(user1.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user2.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user3.getId(), GameMode.TURN_BASED);
+        matchmakingService.processQueueCycle();
+
+        matchmakingService.confirmMatch(user1.getId());
+        matchmakingService.confirmMatch(user2.getId());
+        MatchmakingDtos.PublicQueueStatusResponse finalStatus = matchmakingService.confirmMatch(user3.getId());
+
+        assertThat(finalStatus.status()).isEqualTo(RankedQueueTicketStatus.MATCHED);
+        assertThat(finalStatus.matchedRoomCode()).isNotBlank();
+        assertThat(finalStatus.confirmationDeadlineAt()).isNotNull();
+        assertThat(rankedMatchRepository.findByRoomCode(finalStatus.matchedRoomCode()))
+            .hasValueSatisfying(match -> assertThat(match.getStatus()).isEqualTo(RankedMatchStatus.IN_PROGRESS));
+    }
+
+    @Test
+    void processQueueCycle_expiresPendingConfirmationWhenDeadlinePasses() {
+        AppUser user1 = createUser("queue-expire-1", "queue-expire-1@example.com");
+        AppUser user2 = createUser("queue-expire-2", "queue-expire-2@example.com");
+        AppUser user3 = createUser("queue-expire-3", "queue-expire-3@example.com");
+        ensureProfileElo(user1.getId(), 1200);
+        ensureProfileElo(user2.getId(), 1210);
+        ensureProfileElo(user3.getId(), 1220);
+
+        matchmakingService.enqueue(user1.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user2.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user3.getId(), GameMode.TURN_BASED);
+        matchmakingService.processQueueCycle();
+
+        var pendingTickets = queueTicketRepository
+                .findByStatusOrderByQueuedAtAsc(RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+        assertThat(pendingTickets).hasSize(3);
+        pendingTickets.forEach(ticket -> ticket.setConfirmationDeadlineAt(Instant.now().minusSeconds(1)));
+        queueTicketRepository.saveAll(pendingTickets);
+
+        matchmakingService.processQueueCycle();
+
+        MatchmakingDtos.PublicQueueStatusResponse status = matchmakingService.getStatus(user1.getId());
         assertThat(status.queued()).isFalse();
-        assertThat(status.status()).isEqualTo(RankedQueueTicketStatus.MATCHED);
-        assertThat(status.matchedRoomCode()).isNotBlank();
+        assertThat(status.status()).isEqualTo(RankedQueueTicketStatus.EXPIRED);
+        assertThat(status.matchedRoomCode()).isNull();
     }
 
     private AppUser createUser(String username, String email) {

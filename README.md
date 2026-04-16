@@ -50,9 +50,10 @@ Aplicación multijugador con interfaz gráfica basada en mecánicas de deducció
 - `POST /api/rooms/{roomCode}/votes` votar
 - `POST /api/matchmaking/public/join` entrar a cola pública rankeada
 - `POST /api/matchmaking/public/leave` salir de cola pública rankeada
+- `POST /api/matchmaking/public/confirm` confirmar partida encontrada en cola pública rankeada
 - `GET /api/matchmaking/public/status?userId={id}` estado de cola rankeada
 
-> Nota ELO (fase 4): ranked es **exclusivo de `TURN_BASED`**. El worker de matchmaking corre en backend (ciclo de 1s), forma grupos compatibles por ELO y crea salas `PUBLIC_RANKED` automáticamente. `status` refleja estados terminales (incluyendo `MATCHED` con `matchedRoomCode`) y al finalizar la partida rankeada se persisten transacciones de ELO.
+> Nota ELO (fase 4): ranked es **exclusivo de `TURN_BASED`**. El worker de matchmaking corre en backend (ciclo de 1s), forma grupos compatibles por ELO y abre una ventana de confirmación de 15s (`MATCH_PENDING_CONFIRMATION`) antes de crear la sala `PUBLIC_RANKED`. Cuando todos confirman, `status` pasa a `MATCHED` con `matchedRoomCode`. Si vence el tiempo, el intento expira (`EXPIRED`). Al finalizar la partida rankeada se persisten transacciones de ELO.
 
 ### Arranque local con Docker
 

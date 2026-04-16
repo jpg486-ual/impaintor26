@@ -21,7 +21,6 @@ import com.example.demo.account.repository.RankedQueueTicketRepository;
 import com.example.demo.account.repository.UserRankProfileRepository;
 import com.example.demo.account.service.RankedMatchmakingService;
 import com.example.demo.game.model.GameMode;
-import com.example.demo.game.model.GameRoomType;
 import com.example.demo.game.repository.GamePlayerRepository;
 import com.example.demo.game.repository.GameRoomRepository;
 
@@ -51,13 +50,16 @@ class RankedMatchmakingWorkerTests {
     private GamePlayerRepository playerRepository;
 
     @Test
-    void processQueueCycle_createsRankedRoomAndStartsMatchForCompatiblePlayers() {
+    void processQueueCycle_movesCompatiblePlayersToPendingConfirmationWithoutCreatingRoom() {
         AppUser user1 = createUser("rankeduser1", "rankeduser1@example.com");
         AppUser user2 = createUser("rankeduser2", "rankeduser2@example.com");
         AppUser user3 = createUser("rankeduser3", "rankeduser3@example.com");
         ensureProfileElo(user1.getId(), 1200);
         ensureProfileElo(user2.getId(), 1260);
         ensureProfileElo(user3.getId(), 1280);
+
+        long initialRoomCount = roomRepository.count();
+        long initialPlayerCount = playerRepository.count();
 
         matchmakingService.enqueue(user1.getId(), GameMode.TURN_BASED);
         matchmakingService.enqueue(user2.getId(), GameMode.TURN_BASED);
@@ -67,29 +69,21 @@ class RankedMatchmakingWorkerTests {
 
         assertThat(matchesCreated).isEqualTo(1);
 
-        List<RankedQueueTicket> matchedTickets = queueTicketRepository
-                .findByStatusOrderByQueuedAtAsc(RankedQueueTicketStatus.MATCHED);
-        assertThat(matchedTickets).hasSize(3);
-        String roomCode = matchedTickets.get(0).getMatchedRoomCode();
-        assertThat(roomCode).isNotBlank();
-        assertThat(matchedTickets).allMatch(ticket -> roomCode.equals(ticket.getMatchedRoomCode()));
+        List<RankedQueueTicket> pendingTickets = queueTicketRepository
+            .findByStatusOrderByQueuedAtAsc(RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+        assertThat(pendingTickets).hasSize(3);
+        assertThat(pendingTickets).allMatch(ticket -> ticket.getMatchedRoomCode() == null);
+        assertThat(pendingTickets).allMatch(ticket -> ticket.getRankedMatchId() != null);
+        assertThat(pendingTickets).allMatch(ticket -> ticket.getConfirmationDeadlineAt() != null);
 
-        var room = roomRepository.findByCode(roomCode).orElseThrow();
-        assertThat(room.getRoomType()).isEqualTo(GameRoomType.PUBLIC_RANKED);
-        assertThat(room.getRankedMatchId()).isNotNull();
-        assertThat(room.getPhase()).isNotNull();
-        assertThat(room.getPhase()).isNotEqualTo(com.example.demo.game.model.GamePhase.WAITING);
+        Long rankedMatchId = pendingTickets.get(0).getRankedMatchId();
+        RankedMatch rankedMatch = rankedMatchRepository.findById(rankedMatchId).orElseThrow();
+        assertThat(rankedMatch.getStatus()).isEqualTo(RankedMatchStatus.WAITING_CONFIRMATION);
+        assertThat(rankedMatch.getRoomCode()).isNull();
+        assertThat(rankedMatch.getStartedAt()).isNull();
 
-        var players = playerRepository.findByRoomCodeOrderByJoinedAtAsc(roomCode);
-        assertThat(players).hasSize(3);
-        assertThat(players)
-                .extracting(player -> player.getUserId())
-                .containsExactlyInAnyOrder(user1.getId(), user2.getId(), user3.getId());
-
-        RankedMatch rankedMatch = rankedMatchRepository.findById(room.getRankedMatchId()).orElseThrow();
-        assertThat(rankedMatch.getStatus()).isEqualTo(RankedMatchStatus.IN_PROGRESS);
-        assertThat(rankedMatch.getRoomCode()).isEqualTo(roomCode);
-        assertThat(rankedMatch.getStartedAt()).isNotNull();
+        assertThat(roomRepository.count()).isEqualTo(initialRoomCount);
+        assertThat(playerRepository.count()).isEqualTo(initialPlayerCount);
     }
 
     @Test

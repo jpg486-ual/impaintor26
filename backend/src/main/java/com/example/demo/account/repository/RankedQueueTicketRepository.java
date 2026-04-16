@@ -1,5 +1,6 @@
 package com.example.demo.account.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,4 +20,10 @@ public interface RankedQueueTicketRepository extends JpaRepository<RankedQueueTi
             GameMode requestedGameMode);
 
     List<RankedQueueTicket> findByStatusOrderByQueuedAtAsc(RankedQueueTicketStatus status);
+
+    List<RankedQueueTicket> findByRankedMatchIdAndStatusOrderByQueuedAtAsc(Long rankedMatchId, RankedQueueTicketStatus status);
+
+    List<RankedQueueTicket> findByStatusAndConfirmationDeadlineAtBefore(
+            RankedQueueTicketStatus status,
+            Instant confirmationDeadlineAt);
 }

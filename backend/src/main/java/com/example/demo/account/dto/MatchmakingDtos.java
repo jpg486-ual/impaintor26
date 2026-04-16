@@ -22,6 +22,10 @@ public final class MatchmakingDtos {
             @Min(1) long userId) {
     }
 
+    public record ConfirmPublicQueueMatchRequest(
+            @Min(1) long userId) {
+    }
+
     public record PublicQueueStatusResponse(
             boolean queued,
             Long ticketId,
@@ -33,6 +37,9 @@ public final class MatchmakingDtos {
             Integer searchMaxElo,
             long waitedSeconds,
             Instant queuedAt,
-            String matchedRoomCode) {
+            String matchedRoomCode,
+            Long rankedMatchId,
+            Instant confirmationDeadlineAt,
+            boolean confirmed) {
     }
 }

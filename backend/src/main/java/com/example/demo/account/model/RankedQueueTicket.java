@@ -49,6 +49,15 @@ public class RankedQueueTicket {
     @Column(nullable = true, length = 6)
     private String matchedRoomCode;
 
+    @Column(nullable = true)
+    private Long rankedMatchId;
+
+    @Column(nullable = true)
+    private Instant confirmationDeadlineAt;
+
+    @Column(nullable = true)
+    private Instant confirmedAt;
+
     @Column(nullable = false)
     private Instant createdAt;
 
@@ -139,6 +148,30 @@ public class RankedQueueTicket {
 
     public void setMatchedRoomCode(String matchedRoomCode) {
         this.matchedRoomCode = matchedRoomCode;
+    }
+
+    public Long getRankedMatchId() {
+        return rankedMatchId;
+    }
+
+    public void setRankedMatchId(Long rankedMatchId) {
+        this.rankedMatchId = rankedMatchId;
+    }
+
+    public Instant getConfirmationDeadlineAt() {
+        return confirmationDeadlineAt;
+    }
+
+    public void setConfirmationDeadlineAt(Instant confirmationDeadlineAt) {
+        this.confirmationDeadlineAt = confirmationDeadlineAt;
+    }
+
+    public Instant getConfirmedAt() {
+        return confirmedAt;
+    }
+
+    public void setConfirmedAt(Instant confirmedAt) {
+        this.confirmedAt = confirmedAt;
     }
 
     public Instant getCreatedAt() {
