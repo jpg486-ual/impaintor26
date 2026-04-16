@@ -52,6 +52,15 @@
       <span class="tab-icon">🚪</span>
       Unirse
     </button>
+    <button
+      id="tab-ranked"
+      class="tab-btn"
+      [class.active]="activeTab === 'ranked'"
+      (click)="activeTab = 'ranked'"
+    >
+      <span class="tab-icon">🏆</span>
+      Ranked
+    </button>
   </div>
 
   <!-- Create Room Panel -->
@@ -236,6 +245,98 @@
         }
         Unirme
       </button>
+    </section>
+  }
+
+  <!-- Ranked Matchmaking Panel -->
+  @if (activeTab === 'ranked') {
+    <section class="panel glass-card animate-slide-up">
+      <div class="field-group">
+        <label class="field-label">
+          <span class="label-icon">🏆</span>
+          Cola pública ranked
+        </label>
+        <p class="ranked-help-text">
+          Modo por turnos obligatorio. El emparejamiento empieza cerca de tu ELO y amplía la ventana cada 10 segundos.
+        </p>
+      </div>
+
+      @if (game.rankedProfile(); as profile) {
+        <div class="ranked-stats">
+          <div class="ranked-stat-card">
+            <span class="ranked-stat-label">ELO</span>
+            <strong class="ranked-stat-value">{{ profile.elo }}</strong>
+          </div>
+          <div class="ranked-stat-card">
+            <span class="ranked-stat-label">Partidas</span>
+            <strong class="ranked-stat-value">{{ profile.rankedGamesPlayed }}</strong>
+          </div>
+          <div class="ranked-stat-card">
+            <span class="ranked-stat-label">Provision. restantes</span>
+            <strong class="ranked-stat-value">{{ profile.provisionalMatchesRemaining }}</strong>
+          </div>
+        </div>
+      }
+
+      @if (game.rankedQueueStatus(); as queueStatus) {
+        <div class="ranked-status-card" [class.confirming]="queueStatus.status === 'MATCH_PENDING_CONFIRMATION'">
+          <div class="ranked-status-header">
+            <span class="ranked-status-title">Estado actual</span>
+            <span class="ranked-status-pill">{{ queueStatus.status ?? 'SIN_COLA' }}</span>
+          </div>
+
+          @if (queueStatus.status === 'QUEUED') {
+            <p class="ranked-status-row">Tiempo en cola: {{ queueStatus.waitedSeconds }}s</p>
+            <p class="ranked-status-row">Ventana ELO: {{ queueStatus.searchMinElo }} - {{ queueStatus.searchMaxElo }}</p>
+          }
+
+          @if (queueStatus.status === 'MATCH_PENDING_CONFIRMATION') {
+            <p class="ranked-status-row">Partida encontrada. Confirma para entrar.</p>
+            <p class="ranked-status-row">Cuenta atrás: {{ game.rankedConfirmationSecondsLeft() }}s</p>
+          }
+
+          @if (queueStatus.status === 'EXPIRED') {
+            <p class="ranked-status-row">La confirmación venció. Busca otra partida ranked.</p>
+          }
+        </div>
+      }
+
+      <div class="ranked-actions">
+        @if (game.rankedQueueStatus()?.status === 'MATCH_PENDING_CONFIRMATION') {
+          <button
+            id="btn-confirm-ranked"
+            class="primary-btn ranked-confirm-btn"
+            (click)="confirmRankedMatch()"
+            [disabled]="game.isLoading()"
+          >
+            ✅ Confirmar partida
+          </button>
+        } @else {
+          <button
+            id="btn-search-ranked"
+            class="primary-btn ranked-btn"
+            (click)="startRankedSearch()"
+            [disabled]="game.isLoading() || game.rankedSearching()"
+          >
+            @if (game.isLoading()) {
+              <span class="spinner"></span>
+            } @else {
+              <span>🏆</span>
+            }
+            {{ game.rankedSearching() ? 'Buscando...' : 'Buscar partida ranked' }}
+          </button>
+        }
+
+        @if (game.rankedSearching()) {
+          <button
+            id="btn-cancel-ranked"
+            class="secondary-btn"
+            (click)="leaveRankedQueue()"
+          >
+            Cancelar búsqueda
+          </button>
+        }
+      </div>
     </section>
   }
 

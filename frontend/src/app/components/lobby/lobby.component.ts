@@ -20,7 +20,7 @@ export class LobbyComponent {
   roundDuration = 60;
   votingDuration = 25;
   maxRounds = 5;
-  activeTab: 'create' | 'join' = 'create';
+  activeTab: 'create' | 'join' | 'ranked' = 'create';
 
   createRoom(): void {
     const roundDurationSeconds = this.selectedGameMode === 'TURN_BASED'
@@ -41,6 +41,18 @@ export class LobbyComponent {
 
   joinRoom(): void {
     this.game.joinRoom(this.username, this.roomCodeInput);
+  }
+
+  startRankedSearch(): void {
+    this.game.startRankedSearch(this.username);
+  }
+
+  confirmRankedMatch(): void {
+    this.game.confirmRankedMatch();
+  }
+
+  leaveRankedQueue(): void {
+    this.game.leaveRankedQueue();
   }
 
   toggleTheme(theme: any): void {

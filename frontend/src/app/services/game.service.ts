@@ -10,6 +10,39 @@ export interface RoomJoinResponse {
   host: boolean;
 }
 
+export type RankedQueueTicketStatus =
+  | 'QUEUED'
+  | 'MATCH_PENDING_CONFIRMATION'
+  | 'MATCHED'
+  | 'CANCELLED'
+  | 'EXPIRED';
+
+export interface PublicPlayerProfileResponse {
+  userId: number;
+  username: string;
+  elo: number;
+  rankedGamesPlayed: number;
+  provisionalMatchesRemaining: number;
+}
+
+export interface PublicQueueStatusResponse {
+  queued: boolean;
+  ticketId: number | null;
+  userId: number;
+  gameMode: GameMode | null;
+  status: RankedQueueTicketStatus | null;
+  eloAtQueueTime: number;
+  searchMinElo: number | null;
+  searchMaxElo: number | null;
+  waitedSeconds: number;
+  queuedAt: string | null;
+  matchedRoomCode: string | null;
+  matchedPlayerId: number | null;
+  rankedMatchId: number | null;
+  confirmationDeadlineAt: string | null;
+  confirmed: boolean;
+}
+
 export type GameMode = 'SIMULTANEOUS' | 'TURN_BASED';
 export type GamePhase = 'WAITING' | 'DRAWING' | 'VOTING' | 'ROUND_RESULT' | 'FINISHED';
 
@@ -64,10 +97,13 @@ export interface ThemeOption {
 @Injectable({providedIn: 'root'})
 export class GameService {
   private readonly apiBase = '/api/rooms';
+  private readonly matchmakingBase = '/api/matchmaking/public';
   private readonly wsBase = '/api/ws';
   private readonly wsNativeBase = this.buildNativeWsUrl();
   private stompClient: Client | null = null;
   private pollHandle: ReturnType<typeof setInterval> | null = null;
+  private rankedPollHandle: ReturnType<typeof setInterval> | null = null;
+  private rankedTickerHandle: ReturnType<typeof setInterval> | null = null;
   private countdownHandle: ReturnType<typeof setInterval> | null = null;
   private wsFailedAttempts = 0;
   private wsFallbackAttempted = false;
@@ -89,6 +125,10 @@ export class GameService {
   readonly wsEverConnected = signal(false);
   readonly wsTransport = signal<'NATIVE_WS' | 'SOCKJS' | 'POLLING'>('NATIVE_WS');
   readonly wsLastError = signal('');
+  readonly rankedProfile = signal<PublicPlayerProfileResponse | null>(null);
+  readonly rankedQueueStatus = signal<PublicQueueStatusResponse | null>(null);
+  readonly rankedSearching = signal(false);
+  readonly rankedNowMs = signal(Date.now());
 
   /* ── Computed ───────────────────────────── */
   readonly canStart = computed(() => {
@@ -151,6 +191,13 @@ export class GameService {
     return 'Reconectando...';
   });
 
+  readonly rankedConfirmationSecondsLeft = computed(() => {
+    const deadline = this.rankedQueueStatus()?.confirmationDeadlineAt;
+    if (!deadline) return 0;
+    const diff = new Date(deadline).getTime() - this.rankedNowMs();
+    return Math.max(0, Math.ceil(diff / 1000));
+  });
+
   readonly themes: ThemeOption[] = [
     {key: 'animales', label: 'Animales', emoji: '🐾', selected: true},
     {key: 'comida', label: 'Comida', emoji: '🍕', selected: true},
@@ -164,6 +211,7 @@ export class GameService {
   /* ── Room actions ──────────────────────── */
   createRoom(username: string, gameMode: GameMode, roundDuration: number, votingDuration: number, maxRounds: number): void {
     this.clearAlerts();
+    this.cancelRankedQueueSilently();
     if (!username.trim()) {
       this.showError('Introduce un nombre de usuario.');
       return;
@@ -185,14 +233,8 @@ export class GameService {
       gameMode,
     }).subscribe({
       next: (res) => {
-        this.roomCode.set(res.roomCode);
-        this.playerId.set(res.playerId);
-        this.isHost.set(res.host);
         this.isLoading.set(false);
-        this.showMessage(`Sala ${res.roomCode} creada`);
-        void this.connectWebSocket();
-        this.startPolling();
-        this.router.navigate(['/room', res.roomCode]);
+        this.enterRoomSession(res.roomCode, res.playerId, res.host, `Sala ${res.roomCode} creada`);
       },
       error: (e) => { this.isLoading.set(false); this.handleError(e); },
     });
@@ -200,6 +242,7 @@ export class GameService {
 
   joinRoom(username: string, code: string): void {
     this.clearAlerts();
+    this.cancelRankedQueueSilently();
     if (!username.trim() || !code.trim()) {
       this.showError('Rellena nombre y código de sala.');
       return;
@@ -211,16 +254,83 @@ export class GameService {
       username: username.trim(),
     }).subscribe({
       next: (res) => {
-        this.roomCode.set(res.roomCode);
-        this.playerId.set(res.playerId);
-        this.isHost.set(res.host);
         this.isLoading.set(false);
-        this.showMessage(`Unido a sala ${res.roomCode}`);
-        void this.connectWebSocket();
-        this.startPolling();
-        this.router.navigate(['/room', res.roomCode]);
+        this.enterRoomSession(res.roomCode, res.playerId, res.host, `Unido a sala ${res.roomCode}`);
       },
       error: (e) => { this.isLoading.set(false); this.handleError(e); },
+    });
+  }
+
+  startRankedSearch(username: string): void {
+    this.clearAlerts();
+    this.cancelRankedQueueSilently();
+
+    const normalizedUsername = username.trim();
+    if (!normalizedUsername) {
+      this.showError('Introduce un nombre de usuario.');
+      return;
+    }
+
+    this.isLoading.set(true);
+    this.http.post<PublicPlayerProfileResponse>(`${this.matchmakingBase}/bootstrap`, {
+      username: normalizedUsername,
+    }).subscribe({
+      next: (profile) => {
+        this.rankedProfile.set(profile);
+        this.http.post<PublicQueueStatusResponse>(`${this.matchmakingBase}/join`, {
+          userId: profile.userId,
+          gameMode: 'TURN_BASED',
+        }).subscribe({
+          next: (status) => {
+            this.isLoading.set(false);
+            this.showMessage('Buscando partida ranked...');
+            this.updateRankedStatus(status);
+            this.startRankedPolling();
+          },
+          error: (e) => {
+            this.isLoading.set(false);
+            this.handleError(e);
+          },
+        });
+      },
+      error: (e) => {
+        this.isLoading.set(false);
+        this.handleError(e);
+      },
+    });
+  }
+
+  confirmRankedMatch(): void {
+    const userId = this.rankedProfile()?.userId;
+    if (!userId) {
+      this.showError('No se pudo confirmar la partida ranked.');
+      return;
+    }
+
+    this.http.post<PublicQueueStatusResponse>(`${this.matchmakingBase}/confirm`, {
+      userId,
+    }).subscribe({
+      next: (status) => this.updateRankedStatus(status),
+      error: (e) => this.handleError(e),
+    });
+  }
+
+  leaveRankedQueue(): void {
+    const userId = this.rankedProfile()?.userId;
+    this.stopRankedPolling();
+    if (!userId) {
+      this.rankedSearching.set(false);
+      this.rankedQueueStatus.set(null);
+      return;
+    }
+
+    this.http.post<void>(`${this.matchmakingBase}/leave`, {userId}).subscribe({
+      next: () => {
+        this.rankedSearching.set(false);
+        this.refreshRankedStatus();
+        this.showMessage('Búsqueda ranked cancelada.');
+      },
+      error: (e) => this.handleError(e),
     });
   }
 
@@ -431,11 +541,96 @@ export class GameService {
     this.pollHandle = setInterval(() => this.fetchState(), 3000);
   }
 
+  private startRankedPolling(): void {
+    this.stopRankedPolling();
+    this.rankedTickerHandle = setInterval(() => this.rankedNowMs.set(Date.now()), 500);
+    this.rankedPollHandle = setInterval(() => this.refreshRankedStatus(), 2000);
+  }
+
+  private stopRankedPolling(): void {
+    if (this.rankedPollHandle) {
+      clearInterval(this.rankedPollHandle);
+      this.rankedPollHandle = null;
+    }
+    if (this.rankedTickerHandle) {
+      clearInterval(this.rankedTickerHandle);
+      this.rankedTickerHandle = null;
+    }
+  }
+
   private stopPolling(): void {
     if (this.pollHandle) {
       clearInterval(this.pollHandle);
       this.pollHandle = null;
     }
+  }
+
+  private refreshRankedStatus(): void {
+    const userId = this.rankedProfile()?.userId;
+    if (!userId) return;
+
+    this.http.get<PublicQueueStatusResponse>(`${this.matchmakingBase}/status`, {
+      params: {userId},
+    }).subscribe({
+      next: (status) => this.updateRankedStatus(status),
+      error: (e) => this.handleError(e),
+    });
+  }
+
+  private updateRankedStatus(status: PublicQueueStatusResponse): void {
+    const previous = this.rankedQueueStatus();
+    this.rankedQueueStatus.set(status);
+    this.rankedSearching.set(status.queued);
+    this.rankedNowMs.set(Date.now());
+
+    if (status.status === 'MATCHED' && status.matchedRoomCode && status.matchedPlayerId) {
+      this.stopRankedPolling();
+      this.enterRoomSession(
+        status.matchedRoomCode,
+        status.matchedPlayerId,
+        false,
+        `Partida ranked encontrada: ${status.matchedRoomCode}`,
+      );
+      return;
+    }
+
+    if (status.status === 'EXPIRED' && previous?.status !== 'EXPIRED') {
+      this.stopRankedPolling();
+      this.rankedSearching.set(false);
+      this.showMessage('La confirmación venció. Puedes buscar otra partida ranked.');
+    }
+    if (status.status === 'CANCELLED') {
+      this.stopRankedPolling();
+      this.rankedSearching.set(false);
+    }
+  }
+
+  private cancelRankedQueueSilently(): void {
+    const userId = this.rankedProfile()?.userId;
+    if (!userId || !this.rankedSearching()) {
+      return;
+    }
+
+    this.stopRankedPolling();
+    this.rankedSearching.set(false);
+    this.http.post<void>(`${this.matchmakingBase}/leave`, {userId}).subscribe({
+      next: () => {
+        this.rankedQueueStatus.set(null);
+      },
+      error: () => {
+        this.rankedQueueStatus.set(null);
+      },
+    });
+  }
+
+  private enterRoomSession(roomCode: string, playerId: number, host: boolean, toastMessage: string): void {
+    this.roomCode.set(roomCode);
+    this.playerId.set(playerId);
+    this.isHost.set(host);
+    this.showMessage(toastMessage);
+    void this.connectWebSocket();
+    this.startPolling();
+    this.router.navigate(['/room', roomCode]);
   }
 
   /* ── Countdown ─────────────────────────── */
@@ -463,6 +658,7 @@ export class GameService {
   leaveRoom(): void {
     this.disconnectWebSocket();
     this.stopPolling();
+    this.stopRankedPolling();
     if (this.countdownHandle) clearInterval(this.countdownHandle);
     this.wsFailedAttempts = 0;
     this.wsFallbackAttempted = false;
@@ -477,6 +673,8 @@ export class GameService {
     this.isHost.set(false);
     this.state.set(null);
     this.secondsLeft.set(0);
+    this.rankedSearching.set(false);
+    this.rankedQueueStatus.set(null);
     this.router.navigate(['/']);
   }
 
