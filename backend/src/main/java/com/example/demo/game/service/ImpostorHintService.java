@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,6 +28,7 @@ public class ImpostorHintService {
     private static final Logger log = LoggerFactory.getLogger(ImpostorHintService.class);
     private static final String FALLBACK_HINT = "no tienes pistas :(";
     private static final Pattern WORD_PATTERN = Pattern.compile("\\\"word\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+    private static final Set<String> BLOCKED_TERMS = Set.of("nigga", "nigger");
 
     private final boolean enabled;
     private final String datamuseBaseUrl;
@@ -67,21 +69,31 @@ public class ImpostorHintService {
         }
 
         try {
-            List<String> words = fetchRelatedWords(seed.trim());
-            List<String> normalized = normalize(words, seed.trim());
-            if (normalized.size() < maxHints) {
+            String normalizedSeed = seed.trim();
+            Map<String, String> uniqueHints = new LinkedHashMap<>();
+
+            collectHints(uniqueHints, fetchRelatedWordsByRelation(normalizedSeed, "rel_trg"), normalizedSeed);
+            if (uniqueHints.size() < maxHints) {
+                collectHints(uniqueHints, fetchRelatedWordsByRelation(normalizedSeed, "ml"), normalizedSeed);
+            }
+            if (uniqueHints.size() < maxHints) {
+                collectHints(uniqueHints, fetchRelatedWordsByRelation(normalizedSeed, "rel_syn"), normalizedSeed);
+            }
+
+            List<String> hints = uniqueHints.values().stream().limit(maxHints).toList();
+            if (hints.size() < maxHints) {
                 return fallbackHints();
             }
-            return normalized;
+            return hints;
         } catch (Exception e) {
             log.warn("Datamuse hints unavailable for seed '{}': {}", seed, e.getMessage());
             return fallbackHints();
         }
     }
 
-    private List<String> fetchRelatedWords(String seed) throws Exception {
+    private List<String> fetchRelatedWordsByRelation(String seed, String relation) throws Exception {
         String encodedSeed = URLEncoder.encode(seed, StandardCharsets.UTF_8);
-        URI uri = URI.create(datamuseBaseUrl + "/words?rel_trg=" + encodedSeed);
+        URI uri = URI.create(datamuseBaseUrl + "/words?" + relation + "=" + encodedSeed);
 
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .GET()
@@ -100,9 +112,8 @@ public class ImpostorHintService {
         return words;
     }
 
-    private List<String> normalize(List<String> candidates, String seed) {
+    private void collectHints(Map<String, String> uniqueHints, List<String> candidates, String seed) {
         String seedNormalized = seed.trim().toLowerCase(Locale.ROOT);
-        Map<String, String> unique = new LinkedHashMap<>();
 
         for (String candidate : candidates) {
             String trimmed = candidate == null ? "" : candidate.trim();
@@ -114,13 +125,14 @@ public class ImpostorHintService {
             if (key.equals(seedNormalized)) {
                 continue;
             }
-            unique.putIfAbsent(key, trimmed);
-            if (unique.size() == maxHints) {
+            if (BLOCKED_TERMS.contains(key)) {
+                continue;
+            }
+            uniqueHints.putIfAbsent(key, trimmed);
+            if (uniqueHints.size() == maxHints) {
                 break;
             }
         }
-
-        return new ArrayList<>(unique.values());
     }
 
     private List<String> fallbackHints() {

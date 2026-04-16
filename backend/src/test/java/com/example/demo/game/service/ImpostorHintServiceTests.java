@@ -3,6 +3,8 @@ package com.example.demo.game.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.net.http.HttpClient;
@@ -67,6 +69,36 @@ class ImpostorHintServiceTests {
                 httpClient);
 
         assertThat(service.generateHints("perro")).containsExactly("no tienes pistas :(");
+    }
+
+    @Test
+    void completesHintsUsingMlWhenRelTrgIsEmpty() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> relTrgResponse = (HttpResponse<String>) mock(HttpResponse.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> mlResponse = (HttpResponse<String>) mock(HttpResponse.class);
+
+        when(relTrgResponse.statusCode()).thenReturn(200);
+        when(relTrgResponse.body()).thenReturn("[]");
+
+        when(mlResponse.statusCode()).thenReturn(200);
+        when(mlResponse.body()).thenReturn(
+                "[{\"word\":\"canino\"},{\"word\":\"kennel\"},{\"word\":\"labrador\"}]");
+
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(relTrgResponse)
+                .thenReturn(mlResponse);
+
+        ImpostorHintService service = new ImpostorHintService(
+                true,
+                "https://api.datamuse.com",
+                1200,
+                3,
+                httpClient);
+
+        assertThat(service.generateHints("perro")).containsExactly("canino", "kennel", "labrador");
+        verify(httpClient, times(2)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
     @Test
