@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -26,6 +27,7 @@ import com.example.demo.account.repository.AppUserRepository;
 import com.example.demo.account.repository.RankedMatchRepository;
 import com.example.demo.account.repository.RankedQueueTicketRepository;
 import com.example.demo.game.model.GameMode;
+import com.example.demo.game.repository.GamePlayerRepository;
 import com.example.demo.game.service.GameService;
 
 @Service
@@ -40,6 +42,7 @@ public class RankedMatchmakingService {
     private final AppUserRepository userRepository;
     private final RankedQueueTicketRepository queueTicketRepository;
     private final RankedMatchRepository rankedMatchRepository;
+    private final GamePlayerRepository gamePlayerRepository;
     private final RatingService ratingService;
     private final GameService gameService;
 
@@ -47,13 +50,34 @@ public class RankedMatchmakingService {
             AppUserRepository userRepository,
             RankedQueueTicketRepository queueTicketRepository,
             RankedMatchRepository rankedMatchRepository,
+            GamePlayerRepository gamePlayerRepository,
             RatingService ratingService,
             GameService gameService) {
         this.userRepository = userRepository;
         this.queueTicketRepository = queueTicketRepository;
         this.rankedMatchRepository = rankedMatchRepository;
+        this.gamePlayerRepository = gamePlayerRepository;
         this.ratingService = ratingService;
         this.gameService = gameService;
+    }
+
+    @Transactional
+    public MatchmakingDtos.PublicPlayerProfileResponse bootstrapPublicPlayer(String username) {
+        String normalizedUsername = normalizeUsername(username);
+        AppUser user = userRepository.findByUsernameIgnoreCase(normalizedUsername)
+                .orElseGet(() -> createBootstrapUser(normalizedUsername));
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuario no disponible para ranked");
+        }
+
+        UserRankProfile profile = ratingService.getOrCreateProfile(user.getId());
+        return new MatchmakingDtos.PublicPlayerProfileResponse(
+                user.getId(),
+                user.getUsername(),
+                profile.getElo(),
+                profile.getRankedGamesPlayed(),
+                profile.getProvisionalMatchesRemaining());
     }
 
     @Transactional
@@ -151,7 +175,7 @@ public class RankedMatchmakingService {
         RankedQueueTicket latestTicket = queueTicketRepository.findFirstByUserIdOrderByUpdatedAtDesc(userId).orElse(null);
         if (latestTicket == null) {
             return new MatchmakingDtos.PublicQueueStatusResponse(
-                    false, null, userId, null, null, 0, null, null, 0, null, null, null, null, false);
+                    false, null, userId, null, null, 0, null, null, 0, null, null, null, null, null, false);
         }
         return toStatusResponse(latestTicket, false, now);
     }
@@ -368,7 +392,47 @@ public class RankedMatchmakingService {
     }
 
     private void expirePendingMatch(Long rankedMatchId, Instant now) {
-        cancelPendingMatch(rankedMatchId, RankedQueueTicketStatus.EXPIRED, now);
+        if (rankedMatchId == null) {
+            return;
+        }
+
+        List<RankedQueueTicket> pendingTickets = queueTicketRepository
+                .findByRankedMatchIdAndStatusOrderByQueuedAtAsc(
+                        rankedMatchId,
+                        RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+
+        Map<Long, AppUser> usersById = new HashMap<>();
+        List<AppUser> users = userRepository.findAllById(pendingTickets.stream().map(RankedQueueTicket::getUserId).toList());
+        for (AppUser user : users) {
+            usersById.put(user.getId(), user);
+        }
+
+        for (RankedQueueTicket ticket : pendingTickets) {
+            AppUser user = usersById.get(ticket.getUserId());
+            boolean shouldRequeue = ticket.getConfirmedAt() != null
+                    && user != null
+                    && user.getStatus() == UserStatus.ACTIVE;
+
+            if (shouldRequeue) {
+                ticket.setStatus(RankedQueueTicketStatus.QUEUED);
+                ticket.setQueuedAt(now);
+                ticket.setMatchedRoomCode(null);
+                ticket.setRankedMatchId(null);
+                ticket.setConfirmationDeadlineAt(null);
+                ticket.setConfirmedAt(null);
+            } else {
+                ticket.setStatus(RankedQueueTicketStatus.EXPIRED);
+                ticket.setConfirmationDeadlineAt(ticket.getConfirmationDeadlineAt() == null ? now : ticket.getConfirmationDeadlineAt());
+            }
+        }
+        queueTicketRepository.saveAll(pendingTickets);
+
+        rankedMatchRepository.findById(rankedMatchId).ifPresent(match -> {
+            if (match.getStatus() != RankedMatchStatus.FINISHED && match.getStatus() != RankedMatchStatus.IN_PROGRESS) {
+                match.setStatus(RankedMatchStatus.CANCELLED);
+                rankedMatchRepository.save(match);
+            }
+        });
     }
 
     private void cancelPendingMatch(Long rankedMatchId, RankedQueueTicketStatus terminalStatus, Instant now) {
@@ -406,6 +470,49 @@ public class RankedMatchmakingService {
         }
     }
 
+    private AppUser createBootstrapUser(String normalizedUsername) {
+        AppUser user = new AppUser();
+        user.setUsername(normalizedUsername);
+        user.setEmail(buildUniqueBootstrapEmail(normalizedUsername));
+        user.setPasswordHash("public-ranked-bootstrap");
+        return userRepository.save(user);
+    }
+
+    private String normalizeUsername(String rawUsername) {
+        if (rawUsername == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de usuario inválido");
+        }
+        String normalized = rawUsername.trim();
+        if (normalized.length() < 2 || normalized.length() > 32) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de usuario inválido");
+        }
+        return normalized;
+    }
+
+    private String buildUniqueBootstrapEmail(String username) {
+        String base = username.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9._-]", "-")
+                .replaceAll("-+", "-")
+                .replaceAll("(^[-.]+|[-.]+$)", "");
+        if (base.isBlank()) {
+            base = "player";
+        }
+
+        String candidate = base + "@ranked.local";
+        if (!userRepository.existsByEmailIgnoreCase(candidate)) {
+            return candidate;
+        }
+
+        int suffix = 2;
+        while (true) {
+            String withSuffix = base + "-" + suffix + "@ranked.local";
+            if (!userRepository.existsByEmailIgnoreCase(withSuffix)) {
+                return withSuffix;
+            }
+            suffix++;
+        }
+    }
+
     private boolean isMutuallyCompatible(RankedQueueTicket left, RankedQueueTicket right) {
         int leftElo = left.getEloAtQueueTime();
         int rightElo = right.getEloAtQueueTime();
@@ -434,6 +541,7 @@ public class RankedMatchmakingService {
             boolean queued,
             Instant now) {
         long waitedSeconds = Math.max(0, Duration.between(ticket.getQueuedAt(), now).getSeconds());
+        Long matchedPlayerId = resolveMatchedPlayerId(ticket);
         return new MatchmakingDtos.PublicQueueStatusResponse(
                 queued,
                 ticket.getId(),
@@ -446,8 +554,18 @@ public class RankedMatchmakingService {
                 waitedSeconds,
                 ticket.getQueuedAt(),
                 ticket.getMatchedRoomCode(),
+                matchedPlayerId,
                 ticket.getRankedMatchId(),
                 ticket.getConfirmationDeadlineAt(),
                 ticket.getConfirmedAt() != null);
+    }
+
+    private Long resolveMatchedPlayerId(RankedQueueTicket ticket) {
+        if (ticket.getMatchedRoomCode() == null || ticket.getUserId() == null) {
+            return null;
+        }
+        return gamePlayerRepository.findByRoomCodeAndUserId(ticket.getMatchedRoomCode(), ticket.getUserId())
+                .map(player -> player.getId())
+                .orElse(null);
     }
 }

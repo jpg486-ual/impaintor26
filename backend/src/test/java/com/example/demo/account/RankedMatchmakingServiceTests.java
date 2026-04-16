@@ -58,6 +58,28 @@ class RankedMatchmakingServiceTests {
     }
 
     @Test
+    void bootstrapPublicPlayer_createsUserAndDefaultRankProfile() {
+        MatchmakingDtos.PublicPlayerProfileResponse response = matchmakingService
+                .bootstrapPublicPlayer("RankedBootstrapper");
+
+        assertThat(response.userId()).isPositive();
+        assertThat(response.username()).isEqualTo("RankedBootstrapper");
+        assertThat(response.elo()).isEqualTo(com.example.demo.account.model.UserRankProfile.DEFAULT_ELO);
+        assertThat(response.rankedGamesPlayed()).isZero();
+        assertThat(response.provisionalMatchesRemaining())
+                .isEqualTo(com.example.demo.account.model.UserRankProfile.DEFAULT_PROVISIONAL_MATCHES);
+    }
+
+    @Test
+    void bootstrapPublicPlayer_isIdempotentByUsername() {
+        MatchmakingDtos.PublicPlayerProfileResponse first = matchmakingService.bootstrapPublicPlayer("ranked-idem");
+        MatchmakingDtos.PublicPlayerProfileResponse second = matchmakingService.bootstrapPublicPlayer("RANKED-IDEM");
+
+        assertThat(first.userId()).isEqualTo(second.userId());
+        assertThat(userRepository.findAll()).hasSize(1);
+    }
+
+    @Test
     void enqueue_isIdempotentForQueuedUser() {
         AppUser user = createUser("queue-repeat", "queue-repeat@example.com");
 
@@ -150,6 +172,7 @@ class RankedMatchmakingServiceTests {
 
         assertThat(finalStatus.status()).isEqualTo(RankedQueueTicketStatus.MATCHED);
         assertThat(finalStatus.matchedRoomCode()).isNotBlank();
+        assertThat(finalStatus.matchedPlayerId()).isNotNull();
         assertThat(finalStatus.confirmationDeadlineAt()).isNotNull();
         assertThat(rankedMatchRepository.findByRoomCode(finalStatus.matchedRoomCode()))
             .hasValueSatisfying(match -> assertThat(match.getStatus()).isEqualTo(RankedMatchStatus.IN_PROGRESS));
@@ -181,6 +204,46 @@ class RankedMatchmakingServiceTests {
         assertThat(status.queued()).isFalse();
         assertThat(status.status()).isEqualTo(RankedQueueTicketStatus.EXPIRED);
         assertThat(status.matchedRoomCode()).isNull();
+    }
+
+    @Test
+    void processQueueCycle_requeuesConfirmedPlayersWhenConfirmationExpires() {
+        AppUser user1 = createUser("queue-requeue-1", "queue-requeue-1@example.com");
+        AppUser user2 = createUser("queue-requeue-2", "queue-requeue-2@example.com");
+        AppUser user3 = createUser("queue-requeue-3", "queue-requeue-3@example.com");
+        ensureProfileElo(user1.getId(), 1200);
+        ensureProfileElo(user2.getId(), 1210);
+        ensureProfileElo(user3.getId(), 1220);
+
+        matchmakingService.enqueue(user1.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user2.getId(), GameMode.TURN_BASED);
+        matchmakingService.enqueue(user3.getId(), GameMode.TURN_BASED);
+        matchmakingService.processQueueCycle();
+
+        matchmakingService.confirmMatch(user1.getId());
+
+        var pendingTickets = queueTicketRepository
+                .findByStatusOrderByQueuedAtAsc(RankedQueueTicketStatus.MATCH_PENDING_CONFIRMATION);
+        assertThat(pendingTickets).hasSize(3);
+        Long rankedMatchId = pendingTickets.get(0).getRankedMatchId();
+        pendingTickets.forEach(ticket -> ticket.setConfirmationDeadlineAt(Instant.now().minusSeconds(1)));
+        queueTicketRepository.saveAll(pendingTickets);
+
+        matchmakingService.processQueueCycle();
+
+        MatchmakingDtos.PublicQueueStatusResponse confirmedPlayerStatus = matchmakingService.getStatus(user1.getId());
+        MatchmakingDtos.PublicQueueStatusResponse unconfirmedPlayerStatus = matchmakingService.getStatus(user2.getId());
+
+        assertThat(confirmedPlayerStatus.queued()).isTrue();
+        assertThat(confirmedPlayerStatus.status()).isEqualTo(RankedQueueTicketStatus.QUEUED);
+        assertThat(confirmedPlayerStatus.confirmed()).isFalse();
+        assertThat(confirmedPlayerStatus.confirmationDeadlineAt()).isNull();
+
+        assertThat(unconfirmedPlayerStatus.queued()).isFalse();
+        assertThat(unconfirmedPlayerStatus.status()).isEqualTo(RankedQueueTicketStatus.EXPIRED);
+
+        assertThat(rankedMatchRepository.findById(rankedMatchId))
+                .hasValueSatisfying(match -> assertThat(match.getStatus()).isEqualTo(RankedMatchStatus.CANCELLED));
     }
 
     private AppUser createUser(String username, String email) {

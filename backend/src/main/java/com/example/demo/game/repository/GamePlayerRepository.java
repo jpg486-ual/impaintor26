@@ -16,5 +16,7 @@ public interface GamePlayerRepository extends JpaRepository<GamePlayer, Long> {
 
     Optional<GamePlayer> findByIdAndRoomCode(Long id, String roomCode);
 
+    Optional<GamePlayer> findByRoomCodeAndUserId(String roomCode, Long userId);
+
     void deleteByRoomCode(String roomCode);
 }

@@ -26,6 +26,14 @@ public class MatchmakingController {
         this.rankedMatchmakingService = rankedMatchmakingService;
     }
 
+    @PostMapping("/bootstrap")
+    public ResponseEntity<MatchmakingDtos.PublicPlayerProfileResponse> bootstrapPublicPlayer(
+            @Valid @RequestBody MatchmakingDtos.BootstrapPublicPlayerRequest request) {
+        MatchmakingDtos.PublicPlayerProfileResponse response = rankedMatchmakingService
+                .bootstrapPublicPlayer(request.username());
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/join")
     public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> joinQueue(
             @Valid @RequestBody MatchmakingDtos.JoinPublicQueueRequest request) {
