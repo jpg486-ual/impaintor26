@@ -58,28 +58,6 @@ class RankedMatchmakingServiceTests {
     }
 
     @Test
-    void bootstrapPublicPlayer_createsUserAndDefaultRankProfile() {
-        MatchmakingDtos.PublicPlayerProfileResponse response = matchmakingService
-                .bootstrapPublicPlayer("RankedBootstrapper");
-
-        assertThat(response.userId()).isPositive();
-        assertThat(response.username()).isEqualTo("RankedBootstrapper");
-        assertThat(response.elo()).isEqualTo(com.example.demo.account.model.UserRankProfile.DEFAULT_ELO);
-        assertThat(response.rankedGamesPlayed()).isZero();
-        assertThat(response.provisionalMatchesRemaining())
-                .isEqualTo(com.example.demo.account.model.UserRankProfile.DEFAULT_PROVISIONAL_MATCHES);
-    }
-
-    @Test
-    void bootstrapPublicPlayer_isIdempotentByUsername() {
-        MatchmakingDtos.PublicPlayerProfileResponse first = matchmakingService.bootstrapPublicPlayer("ranked-idem");
-        MatchmakingDtos.PublicPlayerProfileResponse second = matchmakingService.bootstrapPublicPlayer("RANKED-IDEM");
-
-        assertThat(first.userId()).isEqualTo(second.userId());
-        assertThat(userRepository.findAll()).hasSize(1);
-    }
-
-    @Test
     void enqueue_isIdempotentForQueuedUser() {
         AppUser user = createUser("queue-repeat", "queue-repeat@example.com");
 

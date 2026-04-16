@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -59,25 +58,6 @@ public class RankedMatchmakingService {
         this.gamePlayerRepository = gamePlayerRepository;
         this.ratingService = ratingService;
         this.gameService = gameService;
-    }
-
-    @Transactional
-    public MatchmakingDtos.PublicPlayerProfileResponse bootstrapPublicPlayer(String username) {
-        String normalizedUsername = normalizeUsername(username);
-        AppUser user = userRepository.findByUsernameIgnoreCase(normalizedUsername)
-                .orElseGet(() -> createBootstrapUser(normalizedUsername));
-
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuario no disponible para ranked");
-        }
-
-        UserRankProfile profile = ratingService.getOrCreateProfile(user.getId());
-        return new MatchmakingDtos.PublicPlayerProfileResponse(
-                user.getId(),
-                user.getUsername(),
-                profile.getElo(),
-                profile.getRankedGamesPlayed(),
-                profile.getProvisionalMatchesRemaining());
     }
 
     @Transactional
@@ -467,49 +447,6 @@ public class RankedMatchmakingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuario no disponible para ranked");
-        }
-    }
-
-    private AppUser createBootstrapUser(String normalizedUsername) {
-        AppUser user = new AppUser();
-        user.setUsername(normalizedUsername);
-        user.setEmail(buildUniqueBootstrapEmail(normalizedUsername));
-        user.setPasswordHash("public-ranked-bootstrap");
-        return userRepository.save(user);
-    }
-
-    private String normalizeUsername(String rawUsername) {
-        if (rawUsername == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de usuario inválido");
-        }
-        String normalized = rawUsername.trim();
-        if (normalized.length() < 2 || normalized.length() > 32) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de usuario inválido");
-        }
-        return normalized;
-    }
-
-    private String buildUniqueBootstrapEmail(String username) {
-        String base = username.trim().toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9._-]", "-")
-                .replaceAll("-+", "-")
-                .replaceAll("(^[-.]+|[-.]+$)", "");
-        if (base.isBlank()) {
-            base = "player";
-        }
-
-        String candidate = base + "@ranked.local";
-        if (!userRepository.existsByEmailIgnoreCase(candidate)) {
-            return candidate;
-        }
-
-        int suffix = 2;
-        while (true) {
-            String withSuffix = base + "-" + suffix + "@ranked.local";
-            if (!userRepository.existsByEmailIgnoreCase(withSuffix)) {
-                return withSuffix;
-            }
-            suffix++;
         }
     }
 

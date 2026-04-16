@@ -17,9 +17,10 @@ export type RankedQueueTicketStatus =
   | 'CANCELLED'
   | 'EXPIRED';
 
-export interface PublicPlayerProfileResponse {
+export interface AuthSessionResponse {
   userId: number;
   username: string;
+  email: string;
   elo: number;
   rankedGamesPlayed: number;
   provisionalMatchesRemaining: number;
@@ -97,6 +98,7 @@ export interface ThemeOption {
 @Injectable({providedIn: 'root'})
 export class GameService {
   private readonly apiBase = '/api/rooms';
+  private readonly authBase = '/api/auth';
   private readonly matchmakingBase = '/api/matchmaking/public';
   private readonly wsBase = '/api/ws';
   private readonly wsNativeBase = this.buildNativeWsUrl();
@@ -125,7 +127,7 @@ export class GameService {
   readonly wsEverConnected = signal(false);
   readonly wsTransport = signal<'NATIVE_WS' | 'SOCKJS' | 'POLLING'>('NATIVE_WS');
   readonly wsLastError = signal('');
-  readonly rankedProfile = signal<PublicPlayerProfileResponse | null>(null);
+  readonly rankedProfile = signal<AuthSessionResponse | null>(null);
   readonly rankedQueueStatus = signal<PublicQueueStatusResponse | null>(null);
   readonly rankedSearching = signal(false);
   readonly rankedNowMs = signal(Date.now());
@@ -206,7 +208,77 @@ export class GameService {
     {key: 'profesiones', label: 'Profesiones', emoji: '👨‍🍳', selected: false},
   ];
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(private http: HttpClient, private router: Router) {
+    this.restoreAuthSession();
+  }
+
+  registerRankedAccount(username: string, email: string, password: string): void {
+    this.clearAlerts();
+    const normalizedUsername = username.trim();
+    const normalizedEmail = email.trim();
+    if (!normalizedUsername || !normalizedEmail || !password.trim()) {
+      this.showError('Completa nombre, email y contraseña para registrarte.');
+      return;
+    }
+
+    this.isLoading.set(true);
+    this.http.post<AuthSessionResponse>(`${this.authBase}/register`, {
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password,
+    }).subscribe({
+      next: (session) => {
+        this.isLoading.set(false);
+        this.rankedProfile.set(session);
+        this.showMessage('Sesión iniciada. Ya puedes jugar ranked.');
+      },
+      error: (e) => {
+        this.isLoading.set(false);
+        this.handleError(e);
+      },
+    });
+  }
+
+  loginRankedAccount(identifier: string, password: string): void {
+    this.clearAlerts();
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier || !password.trim()) {
+      this.showError('Introduce usuario/email y contraseña.');
+      return;
+    }
+
+    this.isLoading.set(true);
+    this.http.post<AuthSessionResponse>(`${this.authBase}/login`, {
+      identifier: normalizedIdentifier,
+      password,
+    }).subscribe({
+      next: (session) => {
+        this.isLoading.set(false);
+        this.rankedProfile.set(session);
+        this.refreshRankedStatus();
+        this.showMessage('Sesión iniciada.');
+      },
+      error: (e) => {
+        this.isLoading.set(false);
+        this.handleError(e);
+      },
+    });
+  }
+
+  logoutRankedAccount(): void {
+    this.stopRankedPolling();
+    this.rankedSearching.set(false);
+    this.rankedQueueStatus.set(null);
+    this.http.post<void>(`${this.authBase}/logout`, {}).subscribe({
+      next: () => {
+        this.rankedProfile.set(null);
+        this.showMessage('Sesión cerrada.');
+      },
+      error: () => {
+        this.rankedProfile.set(null);
+      },
+    });
+  }
 
   /* ── Room actions ──────────────────────── */
   createRoom(username: string, gameMode: GameMode, roundDuration: number, votingDuration: number, maxRounds: number): void {
@@ -261,37 +333,24 @@ export class GameService {
     });
   }
 
-  startRankedSearch(username: string): void {
+  startRankedSearch(): void {
     this.clearAlerts();
     this.cancelRankedQueueSilently();
 
-    const normalizedUsername = username.trim();
-    if (!normalizedUsername) {
-      this.showError('Introduce un nombre de usuario.');
+    if (!this.rankedProfile()) {
+      this.showError('Inicia sesión para usar ranked.');
       return;
     }
 
     this.isLoading.set(true);
-    this.http.post<PublicPlayerProfileResponse>(`${this.matchmakingBase}/bootstrap`, {
-      username: normalizedUsername,
+    this.http.post<PublicQueueStatusResponse>(`${this.matchmakingBase}/join`, {
+      gameMode: 'TURN_BASED',
     }).subscribe({
-      next: (profile) => {
-        this.rankedProfile.set(profile);
-        this.http.post<PublicQueueStatusResponse>(`${this.matchmakingBase}/join`, {
-          userId: profile.userId,
-          gameMode: 'TURN_BASED',
-        }).subscribe({
-          next: (status) => {
-            this.isLoading.set(false);
-            this.showMessage('Buscando partida ranked...');
-            this.updateRankedStatus(status);
-            this.startRankedPolling();
-          },
-          error: (e) => {
-            this.isLoading.set(false);
-            this.handleError(e);
-          },
-        });
+      next: (status) => {
+        this.isLoading.set(false);
+        this.showMessage('Buscando partida ranked...');
+        this.updateRankedStatus(status);
+        this.startRankedPolling();
       },
       error: (e) => {
         this.isLoading.set(false);
@@ -301,30 +360,26 @@ export class GameService {
   }
 
   confirmRankedMatch(): void {
-    const userId = this.rankedProfile()?.userId;
-    if (!userId) {
+    if (!this.rankedProfile()) {
       this.showError('No se pudo confirmar la partida ranked.');
       return;
     }
 
-    this.http.post<PublicQueueStatusResponse>(`${this.matchmakingBase}/confirm`, {
-      userId,
-    }).subscribe({
+    this.http.post<PublicQueueStatusResponse>(`${this.matchmakingBase}/confirm`, {}).subscribe({
       next: (status) => this.updateRankedStatus(status),
       error: (e) => this.handleError(e),
     });
   }
 
   leaveRankedQueue(): void {
-    const userId = this.rankedProfile()?.userId;
     this.stopRankedPolling();
-    if (!userId) {
+    if (!this.rankedProfile()) {
       this.rankedSearching.set(false);
       this.rankedQueueStatus.set(null);
       return;
     }
 
-    this.http.post<void>(`${this.matchmakingBase}/leave`, {userId}).subscribe({
+    this.http.post<void>(`${this.matchmakingBase}/leave`, {}).subscribe({
       next: () => {
         this.rankedSearching.set(false);
         this.refreshRankedStatus();
@@ -566,12 +621,9 @@ export class GameService {
   }
 
   private refreshRankedStatus(): void {
-    const userId = this.rankedProfile()?.userId;
-    if (!userId) return;
+    if (!this.rankedProfile()) return;
 
-    this.http.get<PublicQueueStatusResponse>(`${this.matchmakingBase}/status`, {
-      params: {userId},
-    }).subscribe({
+    this.http.get<PublicQueueStatusResponse>(`${this.matchmakingBase}/status`).subscribe({
       next: (status) => this.updateRankedStatus(status),
       error: (e) => this.handleError(e),
     });
@@ -606,14 +658,13 @@ export class GameService {
   }
 
   private cancelRankedQueueSilently(): void {
-    const userId = this.rankedProfile()?.userId;
-    if (!userId || !this.rankedSearching()) {
+    if (!this.rankedProfile() || !this.rankedSearching()) {
       return;
     }
 
     this.stopRankedPolling();
     this.rankedSearching.set(false);
-    this.http.post<void>(`${this.matchmakingBase}/leave`, {userId}).subscribe({
+    this.http.post<void>(`${this.matchmakingBase}/leave`, {}).subscribe({
       next: () => {
         this.rankedQueueStatus.set(null);
       },
@@ -695,6 +746,18 @@ export class GameService {
     this.message.set('');
   }
 
+  private restoreAuthSession(): void {
+    this.http.get<AuthSessionResponse>(`${this.authBase}/me`).subscribe({
+      next: (session) => {
+        this.rankedProfile.set(session);
+        this.refreshRankedStatus();
+      },
+      error: () => {
+        this.rankedProfile.set(null);
+      },
+    });
+  }
+
   private showMessage(msg: string): void {
     this.clearAlerts();
     this.message.set(msg);
@@ -726,6 +789,14 @@ export class GameService {
   }
 
   private handleError(error: HttpErrorResponse): void {
+    if (error.status === 401) {
+      this.rankedSearching.set(false);
+      this.rankedQueueStatus.set(null);
+      this.rankedProfile.set(null);
+      this.showError('Debes iniciar sesión para jugar ranked.');
+      return;
+    }
+
     if (error.status === 0) {
       this.showError('No se pudo conectar con el servidor (red/CORS/proxy).');
       return;

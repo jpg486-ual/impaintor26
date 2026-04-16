@@ -48,13 +48,16 @@ Aplicación multijugador con interfaz gráfica basada en mecánicas de deducció
 - `GET /api/rooms/{roomCode}/state?playerId={id}` estado de partida
 - `POST /api/rooms/{roomCode}/strokes` enviar trazo
 - `POST /api/rooms/{roomCode}/votes` votar
-- `POST /api/matchmaking/public/bootstrap` resolver/crear jugador público ranked y obtener `userId`
+- `POST /api/auth/register` crear cuenta y abrir sesión
+- `POST /api/auth/login` iniciar sesión (usuario o email + contraseña)
+- `POST /api/auth/logout` cerrar sesión
+- `GET /api/auth/me` recuperar sesión actual
 - `POST /api/matchmaking/public/join` entrar a cola pública rankeada
 - `POST /api/matchmaking/public/leave` salir de cola pública rankeada
 - `POST /api/matchmaking/public/confirm` confirmar partida encontrada en cola pública rankeada
-- `GET /api/matchmaking/public/status?userId={id}` estado de cola rankeada
+- `GET /api/matchmaking/public/status` estado de cola rankeada del usuario autenticado
 
-> Nota ELO (fase 4): ranked es **exclusivo de `TURN_BASED`**. El worker de matchmaking corre en backend (ciclo de 1s), forma grupos compatibles por ELO y abre una ventana de confirmación de 15s (`MATCH_PENDING_CONFIRMATION`) antes de crear la sala `PUBLIC_RANKED`. Cuando todos confirman, `status` pasa a `MATCHED` con `matchedRoomCode` y `matchedPlayerId`. Si vence el tiempo, los jugadores que confirmaron se reencolan (`QUEUED`) y los no confirmados pasan a `EXPIRED`. Al finalizar la partida rankeada se persisten transacciones de ELO.
+> Nota ELO (fase 4): ranked es **exclusivo de `TURN_BASED`** y ahora requiere cuenta autenticada. El worker de matchmaking corre en backend (ciclo de 1s), forma grupos compatibles por ELO y abre una ventana de confirmación de 15s (`MATCH_PENDING_CONFIRMATION`) antes de crear la sala `PUBLIC_RANKED`. Cuando todos confirman, `status` pasa a `MATCHED` con `matchedRoomCode` y `matchedPlayerId`. Si vence el tiempo, los jugadores que confirmaron se reencolan (`QUEUED`) y los no confirmados pasan a `EXPIRED`. Al finalizar la partida rankeada se persisten transacciones de ELO.
 
 ### Arranque local con Docker
 

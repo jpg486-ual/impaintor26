@@ -261,7 +261,67 @@
         </p>
       </div>
 
+      @if (!game.rankedProfile()) {
+        <div class="ranked-auth-card">
+          <p class="ranked-auth-title">Inicia sesión para jugar ranked</p>
+          <p class="ranked-auth-subtitle">Usa tu cuenta para guardar ELO y progreso.</p>
+
+          <input
+            id="ranked-login-identifier"
+            class="text-input"
+            [(ngModel)]="rankedIdentifier"
+            maxlength="128"
+            placeholder="Usuario o email"
+            autocomplete="username"
+          />
+
+          <input
+            id="ranked-register-email"
+            class="text-input"
+            [(ngModel)]="rankedEmail"
+            maxlength="128"
+            placeholder="Email (para registrarte)"
+            autocomplete="email"
+          />
+
+          <input
+            id="ranked-login-password"
+            type="password"
+            class="text-input"
+            [(ngModel)]="rankedPassword"
+            maxlength="72"
+            placeholder="Contraseña"
+            autocomplete="current-password"
+          />
+
+          <div class="ranked-auth-actions">
+            <button
+              id="btn-ranked-login"
+              class="secondary-btn"
+              (click)="loginRanked()"
+              [disabled]="game.isLoading()"
+            >
+              Iniciar sesión
+            </button>
+
+            <button
+              id="btn-ranked-register"
+              class="primary-btn ranked-btn"
+              (click)="registerRanked()"
+              [disabled]="game.isLoading()"
+            >
+              Registrarme
+            </button>
+          </div>
+        </div>
+      }
+
       @if (game.rankedProfile(); as profile) {
+        <div class="ranked-account-row">
+          <span class="ranked-account-name">Conectado como {{ profile.username }}</span>
+          <button class="secondary-btn" (click)="logoutRanked()">Cerrar sesión</button>
+        </div>
+
         <div class="ranked-stats">
           <div class="ranked-stat-card">
             <span class="ranked-stat-label">ELO</span>
@@ -316,7 +376,7 @@
             id="btn-search-ranked"
             class="primary-btn ranked-btn"
             (click)="startRankedSearch()"
-            [disabled]="game.isLoading() || game.rankedSearching()"
+            [disabled]="game.isLoading() || game.rankedSearching() || !game.rankedProfile()"
           >
             @if (game.isLoading()) {
               <span class="spinner"></span>

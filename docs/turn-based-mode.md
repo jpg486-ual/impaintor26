@@ -50,7 +50,7 @@ Si no se envía `gameMode`, se usa `SIMULTANEOUS` por defecto.
 ## Ranked público (TURN_BASED)
 
 - Las partidas ranked públicas usan exclusivamente `TURN_BASED`.
-- El cliente puede resolver/crear identidad pública de ranked con `POST /api/matchmaking/public/bootstrap` para obtener `userId`.
+- El acceso a ranked requiere sesión autenticada (`/api/auth/register` o `/api/auth/login`).
 - El matchmaking empareja por ELO y amplía la ventana de búsqueda en bloques de `±100` cada `10s`.
 - Cuando se forma un grupo compatible, cada ticket pasa a `MATCH_PENDING_CONFIRMATION`.
 - La confirmación del match se realiza con `POST /api/matchmaking/public/confirm` y ventana de `15s`.

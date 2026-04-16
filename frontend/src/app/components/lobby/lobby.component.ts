@@ -21,6 +21,9 @@ export class LobbyComponent {
   votingDuration = 25;
   maxRounds = 5;
   activeTab: 'create' | 'join' | 'ranked' = 'create';
+  rankedIdentifier = '';
+  rankedEmail = '';
+  rankedPassword = '';
 
   createRoom(): void {
     const roundDurationSeconds = this.selectedGameMode === 'TURN_BASED'
@@ -44,7 +47,19 @@ export class LobbyComponent {
   }
 
   startRankedSearch(): void {
-    this.game.startRankedSearch(this.username);
+    this.game.startRankedSearch();
+  }
+
+  loginRanked(): void {
+    this.game.loginRankedAccount(this.rankedIdentifier, this.rankedPassword);
+  }
+
+  registerRanked(): void {
+    this.game.registerRankedAccount(this.username, this.rankedEmail, this.rankedPassword);
+  }
+
+  logoutRanked(): void {
+    this.game.logoutRankedAccount();
   }
 
   confirmRankedMatch(): void {

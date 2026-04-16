@@ -6,58 +6,53 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.demo.account.dto.MatchmakingDtos;
+import com.example.demo.account.service.AuthService;
 import com.example.demo.account.service.RankedMatchmakingService;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
 
 @RestController
 @Validated
-@RequestMapping("/api/matchmaking/public")
+@RequestMapping("/matchmaking/public")
 public class MatchmakingController {
 
     private final RankedMatchmakingService rankedMatchmakingService;
+    private final AuthService authService;
 
-    public MatchmakingController(RankedMatchmakingService rankedMatchmakingService) {
+    public MatchmakingController(RankedMatchmakingService rankedMatchmakingService, AuthService authService) {
         this.rankedMatchmakingService = rankedMatchmakingService;
-    }
-
-    @PostMapping("/bootstrap")
-    public ResponseEntity<MatchmakingDtos.PublicPlayerProfileResponse> bootstrapPublicPlayer(
-            @Valid @RequestBody MatchmakingDtos.BootstrapPublicPlayerRequest request) {
-        MatchmakingDtos.PublicPlayerProfileResponse response = rankedMatchmakingService
-                .bootstrapPublicPlayer(request.username());
-        return ResponseEntity.ok(response);
+        this.authService = authService;
     }
 
     @PostMapping("/join")
     public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> joinQueue(
             @Valid @RequestBody MatchmakingDtos.JoinPublicQueueRequest request) {
+        long userId = authService.requireAuthenticatedUserId();
         MatchmakingDtos.PublicQueueStatusResponse response = rankedMatchmakingService
-                .enqueue(request.userId(), request.gameMode());
+                .enqueue(userId, request.gameMode());
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/leave")
-    public ResponseEntity<Void> leaveQueue(@Valid @RequestBody MatchmakingDtos.LeavePublicQueueRequest request) {
-        rankedMatchmakingService.leaveQueue(request.userId());
+    public ResponseEntity<Void> leaveQueue() {
+        long userId = authService.requireAuthenticatedUserId();
+        rankedMatchmakingService.leaveQueue(userId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> confirmQueueMatch(
-            @Valid @RequestBody MatchmakingDtos.ConfirmPublicQueueMatchRequest request) {
-        MatchmakingDtos.PublicQueueStatusResponse response = rankedMatchmakingService.confirmMatch(request.userId());
+    public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> confirmQueueMatch() {
+        long userId = authService.requireAuthenticatedUserId();
+        MatchmakingDtos.PublicQueueStatusResponse response = rankedMatchmakingService.confirmMatch(userId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/status")
-    public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> queueStatus(
-            @RequestParam @Min(1) long userId) {
+    public ResponseEntity<MatchmakingDtos.PublicQueueStatusResponse> queueStatus() {
+        long userId = authService.requireAuthenticatedUserId();
         MatchmakingDtos.PublicQueueStatusResponse response = rankedMatchmakingService.getStatus(userId);
         return ResponseEntity.ok(response);
     }
