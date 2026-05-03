@@ -41,7 +41,7 @@
    - Selecciona 1 de las 2 palabras restantes como pista para el impostor (ver sección 2.4).
    - Asigna a un jugador aleatorio como impostor. **El impostor es el mismo durante toda la partida.**
    - Aleatoriza el orden de dibujo.
-   - Envía a cada pintor la palabra secreta, y al impostor su rol junto con la pista.
+   - Envía a cada pintor la palabra secreta y al impostor su rol junto con la pista.
 
 ### 2.2 Fase de Dibujo
 
