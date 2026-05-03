@@ -26,7 +26,7 @@
 
   <!-- ── ROUND BANNER (cinta de papel) ────────────────────── -->
   <div class="round-banner" aria-label="Estado de la ronda">
-    RONDA {{ round() }}: {{ players()[0]?.username?.toUpperCase() }} ESTÁ DIBUJANDO...
+    RONDA {{ round() }}: {{ drawingPlayerName() || '...' }} ESTÁ DIBUJANDO...
   </div>
 
   <!-- ── CONTENIDO PRINCIPAL (paleta + lienzo + herramientas) -->
@@ -134,9 +134,4 @@
   <span *ngIf="impostorLives() === 0" class="guess-panel__dead">💀 Sin vidas — Game Over</span>
 </aside>
 
-<!-- ══ BOTÓN DEV ══════════════════════════════════════════════ -->
-<div class="dev-toggle">
-  <button id="btn-toggle-role" class="dev-toggle__btn" type="button" (click)="toggleRole()">
-    [DEV] {{ isImpostor() ? 'Impostor 🕵️' : 'Pintor 🎨' }} — cambiar rol
-  </button>
-</div>
+

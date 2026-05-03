@@ -39,6 +39,10 @@ export class MatchmakingService implements OnDestroy {
 
   private timerInterval?: any;
 
+  /**
+   * Inicia la búsqueda de partida.
+   * En producción, aquí se realizaría la llamada al backend (POST /api/matchmaking/join).
+   */
   startSearch(userElo: number = 1000): void {
     this._initialElo.set(userElo);
     this._elapsedSeconds.set(0);
@@ -47,11 +51,8 @@ export class MatchmakingService implements OnDestroy {
 
     this.timerInterval = setInterval(() => {
       this._elapsedSeconds.update(s => s + 1);
-      
-      // Simular que encuentra partida entre los 5 y 15 segundos
-      if (this._elapsedSeconds() > 5 && Math.random() > 0.7) {
-        this.simulateMatchFound('SIM' + Math.floor(Math.random() * 1000));
-      }
+      // Eliminada la simulación de "partida encontrada" automática.
+      // El estado cambiará a 'found' únicamente cuando el servidor emita el evento correspondiente.
     }, 1000);
   }
 
@@ -62,8 +63,11 @@ export class MatchmakingService implements OnDestroy {
     this._roomCode.set(null);
   }
 
-  /** Simula que se ha encontrado una partida */
-  simulateMatchFound(code: string): void {
+  /**
+   * Procesa el evento de partida encontrada desde el servidor.
+   * Invocado por el manejador de WebSockets (futura implementación).
+   */
+  onMatchFound(code: string): void {
     this.stopTimer();
     this._roomCode.set(code);
     this._status.set('found');

@@ -20,14 +20,7 @@ export class UserService {
    * Se inicializa con un usuario de ejemplo para desarrollo/demo.
    * En producción será reemplazado por datos reales del JWT.
    */
-  private readonly _currentUser = signal<User | null>({
-    id: 1,
-    username: 'Jugador',
-    email: 'jugador@impaintor.com',
-    elo: 1200,
-    gamesPlayed: 42,
-    gamesWon: 27,
-  });
+  private readonly _currentUser = signal<User | null>(null);
 
   /** Señal pública de sólo lectura — cumple el principio de encapsulación. */
   readonly currentUser = this._currentUser.asReadonly();

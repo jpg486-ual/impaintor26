@@ -2,7 +2,8 @@ import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, Inp
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
 import { CanvasService } from '../../services/canvas';
-import { DrawingStroke, Point, BrushConfig } from '../../models/drawing';
+import { BrushConfig } from '../../models/drawing';
+import { DrawingEngine } from './engine/drawing-engine';
 
 @Component({
   selector: 'app-canvas',
@@ -16,9 +17,8 @@ export class CanvasComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() isActive = true; // Si es mi turno o estoy viendo
   @Input() showWord = ''; // Palabra a dibujar (para pintores)
 
-  private isDrawing = false;
-  private currentStroke: Point[] = [];
   private destroy$ = new Subject<void>();
+  private engine?: DrawingEngine;
   
   brushConfig: BrushConfig = {
     color: '#000000',
@@ -28,16 +28,9 @@ export class CanvasComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Paleta de colores
   readonly colors = [
-    '#000000', // Negro
-    '#FFFFFF', // Blanco
-    '#FF0000', // Rojo
-    '#00FF00', // Verde
-    '#0000FF', // Azul
-    '#FFFF00', // Amarillo
-    '#FF00FF', // Magenta
-    '#00FFFF', // Cyan
-    '#FFA500', // Naranja
-    '#800080'  // Púrpura
+    '#000000', '#FFFFFF', '#FF0000', '#00FF00', 
+    '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', 
+    '#FFA500', '#800080'
   ];
 
   readonly thicknesses = [1, 3, 5, 8];
@@ -53,7 +46,13 @@ export class CanvasComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     if (isPlatformBrowser(this.platformId)) {
-      this.setupCanvas();
+      // Inicializar el motor puro de dibujo inyectándole el canvas del DOM
+      this.engine = new DrawingEngine(
+        this.canvasRef.nativeElement,
+        (stroke) => this.canvasService.emitStroke(stroke)
+      );
+      // Aplicar estado inicial
+      this.engine.setConfig(this.brushConfig);
     }
   }
 
@@ -62,149 +61,51 @@ export class CanvasComponent implements OnInit, AfterViewInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  private getCtx(): CanvasRenderingContext2D {
-    return this.canvasRef.nativeElement.getContext('2d')!;
-  }
-
-  private setupCanvas(): void {
-    const canvas = this.canvasRef.nativeElement;
-    const ctx = this.getCtx();
-    
-    // Tamaño intrínseco del canvas garantizado
-    if (canvas.width !== 800) canvas.width = 800;
-    if (canvas.height !== 600) canvas.height = 600;
-    
-    // Configuración inicial del contexto
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    
-    // Fondo blanco
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
   private subscribeToConfig(): void {
     this.canvasService.getBrushConfig()
       .pipe(takeUntil(this.destroy$))
       .subscribe((config: BrushConfig) => {
         this.brushConfig = config;
+        // Sincronizar el motor cada vez que cambia la configuración
+        if (this.engine) {
+          this.engine.setConfig(config);
+        }
       });
   }
 
-  // ===== EVENTOS DE DIBUJO =====
+  // ===== EVENTOS DE DIBUJO (DELEGACIÓN PURA - SRP) =====
 
   onMouseDown(event: MouseEvent): void {
-    if (!this.isActive) return;
-    this.startDrawing(event.clientX, event.clientY);
+    if (!this.isActive || !this.engine) return;
+    this.engine.processPointerDown(event.clientX, event.clientY);
   }
 
   onTouchStart(event: TouchEvent): void {
-    if (!this.isActive) return;
-    // Prevenir el scroll en dispositivos móviles mientras se dibuja
-    if (event.cancelable) event.preventDefault();
+    if (!this.isActive || !this.engine) return;
+    if (event.cancelable) event.preventDefault(); // Evitar scroll móvil
     const touch = event.touches[0];
-    this.startDrawing(touch.clientX, touch.clientY);
-  }
-
-  private startDrawing(clientX: number, clientY: number): void {
-    const canvas = this.canvasRef.nativeElement;
-    
-    // 1. JIT Autocorrección de dimensiones
-    if (canvas.width !== 800 || canvas.height !== 600) {
-      this.setupCanvas();
-    }
-    
-    this.isDrawing = true;
-    const point = this.getCanvasPoint(clientX, clientY);
-    this.currentStroke = [point];
-    
-    const ctx = this.getCtx();
-    
-    // 2. Rehidratación incondicional de estado
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = this.brushConfig.color;
-    ctx.lineWidth = this.brushConfig.thickness;
-    ctx.fillStyle = this.brushConfig.color;
-    
-    // 3. Dibujar punto gordo inicial para clic rápido
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, this.brushConfig.thickness / 2, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Empezar trazado para el movimiento
-    ctx.beginPath();
-    ctx.moveTo(point.x, point.y);
+    this.engine.processPointerDown(touch.clientX, touch.clientY);
   }
 
   onMouseMove(event: MouseEvent): void {
-    if (!this.isDrawing || !this.isActive) return;
-    this.continueDrawing(event.clientX, event.clientY);
+    if (!this.isActive || !this.engine) return;
+    this.engine.processPointerMove(event.clientX, event.clientY);
   }
 
   onTouchMove(event: TouchEvent): void {
-    if (!this.isDrawing || !this.isActive) return;
+    if (!this.isActive || !this.engine) return;
     if (event.cancelable) event.preventDefault();
     const touch = event.touches[0];
-    this.continueDrawing(touch.clientX, touch.clientY);
-  }
-
-  private continueDrawing(clientX: number, clientY: number): void {
-    const point = this.getCanvasPoint(clientX, clientY);
-    this.currentStroke.push(point);
-    
-    const ctx = this.getCtx();
-    
-    // Rehidratación explícita del estado del contexto antes de trazar
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = this.brushConfig.color;
-    ctx.lineWidth = this.brushConfig.thickness;
-    
-    // Dibujar en tiempo real
-    ctx.lineTo(point.x, point.y);
-    ctx.stroke();
+    this.engine.processPointerMove(touch.clientX, touch.clientY);
   }
 
   onMouseUp(): void {
-    if (!this.isDrawing) return;
-    
-    if (this.currentStroke.length > 0) {
-      // Emitir el trazo completo
-      const stroke: DrawingStroke = {
-        type: 'STROKE',
-        points: this.currentStroke,
-        color: this.brushConfig.color,
-        thickness: this.brushConfig.thickness,
-        timestamp: Date.now()
-      };
-      
-      this.canvasService.emitStroke(stroke);
+    if (this.engine) {
+      this.engine.processPointerUp();
     }
-    
-    this.isDrawing = false;
-    this.currentStroke = [];
   }
 
-  private getCanvasPoint(clientX: number, clientY: number): Point {
-    const canvas = this.canvasRef.nativeElement;
-    const rect = canvas.getBoundingClientRect();
-    
-    // Protección contra divisiones por cero (canvas oculto o no renderizado)
-    if (rect.width === 0 || rect.height === 0) {
-      return { x: 0, y: 0 };
-    }
-    
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
-    };
-  }
-
-  // ===== HERRAMIENTAS =====
+  // ===== HERRAMIENTAS (UI) =====
 
   selectColor(color: string): void {
     this.canvasService.setColor(color);
@@ -223,13 +124,10 @@ export class CanvasComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   clearCanvas(): void {
-    const canvas = this.canvasRef.nativeElement;
-    const ctx = this.getCtx();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    this.canvasService.clearCanvas();
+    if (this.engine) {
+      this.engine.clear();
+      this.canvasService.clearCanvas();
+    }
   }
 
   // ===== UTILIDADES =====

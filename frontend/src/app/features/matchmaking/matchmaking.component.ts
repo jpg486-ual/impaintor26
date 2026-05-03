@@ -32,12 +32,9 @@ export class MatchmakingComponent implements OnInit, OnDestroy {
     effect(() => {
       if (this.status() === 'found') {
         const code = this.roomCode();
-        // Simular un pequeño delay de 2.5 segundos para mostrar la pantalla de "Partida Encontrada"
-        setTimeout(() => {
-          if (code) {
-            this.router.navigate(['/room', code, 'game']);
-          }
-        }, 2500);
+        if (code) {
+          this.router.navigate(['/room', code, 'game']);
+        }
       }
     });
   }
