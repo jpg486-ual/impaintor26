@@ -1,0 +1,281 @@
+/* ============================================================
+   HOME LANDING  —  Impaintor Art Style
+   ============================================================ */
+
+/* ── Page shell ──────────────────────────────────────────── */
+.landing-container {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-image: url('/images/landing/impaintor-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #f5ead4;
+  cursor: default;
+  user-select: none;
+}
+
+/* ── Paint-splash decorative blobs (mimics the reference) ── */
+.background-decoration {
+  display: none;
+}
+
+/* ── Centre card ─────────────────────────────────────────── */
+.landing-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.6rem;
+  padding: 2.6rem 2.4rem 2.8rem;
+  width: min(92vw, 500px);
+
+  background: transparent;
+  border-radius: 32px;
+  border: none;
+  box-shadow: none;
+}
+
+/* ── Logo + title ────────────────────────────────────────── */
+.logo-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.logo {
+  width: 250px;
+  height: 250px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  margin-bottom: -3rem;
+  position: relative;
+  top: 8vh;
+  /* Mueve solo el gato hacia abajo */
+  filter:
+    drop-shadow(0 6px 18px rgba(50, 30, 5, 0.28)) drop-shadow(0 2px 6px rgba(50, 30, 5, 0.15));
+  animation: floatLogo 4s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes floatLogo {
+
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  45% {
+    transform: translateY(-11px) rotate(-1.5deg);
+  }
+
+  55% {
+    transform: translateY(-12px) rotate(1deg);
+  }
+}
+
+/* Artistic hand-written style title */
+.title-img {
+  width: min(95vw, 700px);
+  max-width: none;
+  object-fit: contain;
+  margin-top: 2.5rem;
+  filter: drop-shadow(2px 4px 10px rgba(26, 39, 68, 0.22));
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.buttons-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 1rem 2.2rem;
+  border: none;
+  border-radius: 999px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 1.12rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.3px;
+}
+
+/* Shimmer ripple on hover */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.30) 50%,
+      transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.btn:hover::after {
+  transform: translateX(100%);
+}
+
+.btn:hover {
+  transform: translateY(-3px) scale(1.015);
+}
+
+.btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Icon circle */
+.btn-icon {
+  font-size: 1.05rem;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.btn-plus {
+  font-size: 1.4rem;
+  font-weight: 900;
+  margin-left: -4px;
+}
+
+/* ─ Login button — golden/amber (matches reference) */
+.btn-login {
+  background: linear-gradient(135deg, #f6b330 0%, #e8920e 100%);
+  color: #1a2744;
+  box-shadow:
+    0 6px 22px rgba(230, 138, 10, 0.50),
+    0 2px 6px rgba(230, 138, 10, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.40);
+}
+
+.btn-login:hover {
+  box-shadow:
+    0 10px 30px rgba(230, 138, 10, 0.60),
+    0 4px 10px rgba(230, 138, 10, 0.35);
+}
+
+/* ─ Register button — teal/turquoise (matches reference) */
+.btn-register {
+  background: linear-gradient(135deg, #22c5bf 0%, #0f8d96 100%);
+  color: #ffffff;
+  box-shadow:
+    0 6px 22px rgba(15, 141, 150, 0.45),
+    0 2px 6px rgba(15, 141, 150, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30);
+}
+
+.btn-register:hover {
+  box-shadow:
+    0 10px 30px rgba(15, 141, 150, 0.55),
+    0 4px 10px rgba(15, 141, 150, 0.30);
+}
+
+/* ─ Guest button — cream/soft white (matches reference) */
+.btn-guest {
+  background: linear-gradient(135deg, #fffdf4 0%, #f0e6cc 100%);
+  color: #3a3020;
+  box-shadow:
+    0 4px 16px rgba(100, 70, 10, 0.18),
+    0 2px 6px rgba(100, 70, 10, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.90);
+  border: 1.5px solid rgba(200, 170, 100, 0.35);
+  font-size: 1.05rem;
+}
+
+.btn-guest:hover {
+  box-shadow:
+    0 8px 22px rgba(100, 70, 10, 0.24),
+    0 3px 8px rgba(100, 70, 10, 0.14);
+}
+
+/* ── Forgot password link ────────────────────────────────── */
+.forgot-password-link {
+  margin: -0.2rem 0 0;
+  padding: 0;
+  text-align: center;
+}
+
+.forgot-password-link a {
+  color: #1d6fa4;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: color 0.2s ease;
+}
+
+.forgot-password-link a:hover {
+  color: #0d4f75;
+  text-decoration: underline;
+}
+
+/* ── Tagline ─────────────────────────────────────────────── */
+.tagline {
+  text-align: center;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding-top: 1rem;
+  border-top: 2px solid rgba(100, 70, 20, 0.12);
+}
+
+.tagline p {
+  font-family: 'Nunito', sans-serif;
+  font-size: 1rem;
+  color: #4d3a20;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .landing-content {
+    padding: 1.8rem 1.4rem 2.2rem;
+    gap: 1.3rem;
+  }
+
+  .logo {
+    width: 115px;
+    height: 115px;
+  }
+
+  .title {
+    font-size: 2.8rem;
+  }
+
+  .btn {
+    padding: 0.9rem 1.6rem;
+    font-size: 1rem;
+  }
+
+  .btn-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 0.95rem;
+  }
+}

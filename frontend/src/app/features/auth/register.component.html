@@ -1,0 +1,96 @@
+<div class="register-page">
+  <!-- Background Decoration -->
+  <div class="background-decoration"></div>
+
+  <div class="register-container">
+    <!-- Logo Section -->
+    <div class="logo-section">
+      <img src="impaintor-cat-bike.png" alt="Impaintor Logo" class="logo">
+      <h1 class="title">Impaintor</h1>
+    </div>
+
+    <!-- Form Card -->
+    <div class="form-card">
+      <h2 class="form-title">Crear Cuenta</h2>
+
+      <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="register-form">
+        <!-- Email Field -->
+        <div class="form-group">
+          <label for="email" class="form-label">Email</label>
+          <input type="email" id="email" formControlName="email" placeholder="tu@email.com" class="form-input">
+          <span class="error-message" *ngIf="registerForm.get('email')?.hasError('required')">
+            El email es requerido
+          </span>
+          <span class="error-message" *ngIf="registerForm.get('email')?.hasError('email')">
+            Email inválido
+          </span>
+        </div>
+
+        <!-- Username Field -->
+        <div class="form-group">
+          <label for="username" class="form-label">Nombre de usuario</label>
+          <input type="text" id="username" formControlName="username" placeholder="tu_nombre_usuario"
+            class="form-input">
+          <span class="error-message" *ngIf="registerForm.get('username')?.hasError('required')">
+            El nombre de usuario es requerido
+          </span>
+          <span class="error-message" *ngIf="registerForm.get('username')?.hasError('minlength')">
+            Mínimo 3 caracteres
+          </span>
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-group">
+          <label for="password" class="form-label">Contraseña</label>
+          <input type="password" id="password" formControlName="password" placeholder="••••••••" class="form-input">
+          <span class="error-message" *ngIf="registerForm.get('password')?.hasError('required')">
+            La contraseña es requerida
+          </span>
+          <span class="error-message" *ngIf="registerForm.get('password')?.hasError('minlength')">
+            Mínimo 6 caracteres
+          </span>
+        </div>
+
+        <!-- Confirm Password Field -->
+        <div class="form-group">
+          <label for="confirmPassword" class="form-label">Confirmar contraseña</label>
+          <input type="password" id="confirmPassword" formControlName="confirmPassword" placeholder="••••••••"
+            class="form-input"
+            [class.input-error]="registerForm.getError('passwordMismatch') && registerForm.get('confirmPassword')?.touched">
+          <span class="error-message"
+            *ngIf="registerForm.getError('passwordMismatch') && registerForm.get('confirmPassword')?.touched">
+            Las contraseñas no coinciden
+          </span>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-submit" [disabled]="!registerForm.valid || isLoading">
+          <span class="btn-text">{{ isLoading ? 'Registrando...' : 'Crear Cuenta' }}</span>
+        </button>
+      </form>
+
+      <!-- Error Message -->
+      <div class="error-alert" *ngIf="errorMessage">
+        <p>{{ errorMessage }}</p>
+      </div>
+
+      <!-- Divider -->
+      <div class="divider">
+        <span>o</span>
+      </div>
+
+      <!-- Links Section -->
+      <div class="links-section">
+        <p class="have-account">
+          ¿Ya tienes cuenta?
+          <button type="button" (click)="goToLogin()" class="btn-text-link">
+            Inicia sesión aquí
+          </button>
+        </p>
+      </div>
+    </div>
+
+    <!-- Tagline -->
+    <p class="tagline">Dibuja, engaña y diviértete con tus amigos</p>
+  </div>
+</div>
