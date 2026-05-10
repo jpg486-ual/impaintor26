@@ -53,7 +53,7 @@
 .cat-circle-wrapper {
   position: relative;
   /* Hacemos el wrapper más grande para que sea el tamaño exacto del círculo */
-  width: clamp(250px, 70vw, 420px);
+  width: clamp(613px, 70vw, 420px);
   aspect-ratio: 1.65 / 1;
   margin-bottom: -3rem;
   top: 0vh;
@@ -74,12 +74,12 @@
 }
 
 .logo {
-  width: 30%;
+  width: 37%;
   /* Ajustado en proporción al wrapper más grande */
   object-fit: contain;
   mix-blend-mode: multiply;
   position: relative;
-  top: 5%;
+  top: 17%;
   /* Ajusta esto para mover el gato dentro del círculo */
   z-index: 2;
   filter:
