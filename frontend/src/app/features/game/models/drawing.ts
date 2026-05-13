@@ -24,3 +24,5 @@ export interface BrushConfig {
   thickness: number;
   tool: BrushTool;
 }
+
+/* hola */

@@ -1,0 +1,68 @@
+<div class="lobby-page" role="main">
+  <!-- Fondo animado del juego (compartido) -->
+  <app-game-background></app-game-background>
+
+  <main class="lobby-card">
+    <!-- Cabecera -->
+    <header class="lobby-header">
+      <div class="room-code-box">
+        <span class="code-label">Código de Sala</span>
+        <div class="code-value" (click)="copyCode()" title="Click para copiar">
+          {{ roomCode }}
+          <span class="copy-icon">📋</span>
+        </div>
+      </div>
+    </header>
+    
+    <!-- Configuración -->
+    <section class="settings-section" *ngIf="roomConfig()">
+      <div class="setting-item">
+        <span class="setting-icon">⏱️</span>
+        <span class="setting-label">Dibujo:</span>
+        <span class="setting-value">{{ roomConfig()?.drawingTime }}s</span>
+      </div>
+      <div class="setting-item">
+        <span class="setting-icon">❤️</span>
+        <span class="setting-label">Vidas:</span>
+        <span class="setting-value">{{ roomConfig()?.impostorLives }}</span>
+      </div>
+    </section>
+
+    <!-- Lista de Jugadores -->
+    <section class="players-section">
+      <h3 class="section-title">Jugadores en la Sala ({{ players().length }}/8)</h3>
+      
+      <div class="players-grid">
+        <div *ngFor="let player of players()" class="player-card" [class.is-host]="player.isHost">
+          <div class="player-avatar">
+            <img [src]="player.avatarUrl || '/images/landing/impaintor-cat-bike.png'" alt="Avatar">
+          </div>
+          <div class="player-info">
+            <span class="player-name">{{ player.username }}</span>
+            <span *ngIf="player.isHost" class="host-badge">👑 Anfitrión</span>
+          </div>
+        </div>
+        
+        <!-- Huecos vacíos (opcional) -->
+        <div *ngFor="let _ of [].constructor(Math.max(0, 8 - players().length))" class="player-card empty-slot">
+          <div class="player-avatar empty">?</div>
+          <div class="player-info">
+            <span class="player-name">Esperando...</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controles -->
+    <footer class="lobby-footer">
+      <button routerLink="/main_menu" class="btn btn-secondary">Salir de Sala</button>
+      <button *ngIf="isHost()" class="btn btn-primary btn-start" (click)="startGame()">
+        Empezar Partida
+      </button>
+      <div *ngIf="!isHost()" class="waiting-host">
+        <span>Esperando a que el anfitrión inicie...</span>
+        <div class="spinner"></div>
+      </div>
+    </footer>
+  </main>
+</div>

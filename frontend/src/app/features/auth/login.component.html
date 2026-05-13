@@ -1,0 +1,82 @@
+<div class="login-page">
+  <div class="login-container">
+
+    <!-- Gato asomándose -->
+    <div class="cat-peek-wrapper">
+      <img src="/images/login/login-cat-peek.png" alt="Gato asomándose" class="cat-peek">
+    </div>
+
+    <!-- Form Card -->
+    <div class="form-card">
+      <h2 class="form-title">Iniciar Sesión</h2>
+
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+        <!-- Email Field -->
+        <div class="form-group">
+          <label for="email" class="form-label">Email</label>
+          <input type="email" id="email" formControlName="email" placeholder="tu@email.com" class="form-input">
+          <span class="error-message"
+            *ngIf="loginForm.get('email')?.touched && loginForm.get('email')?.hasError('required')">
+            El email es requerido
+          </span>
+          <span class="error-message"
+            *ngIf="loginForm.get('email')?.touched && loginForm.get('email')?.hasError('email')">
+            Email inválido
+          </span>
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-group">
+          <label for="password" class="form-label">Contraseña</label>
+          <div class="input-wrapper">
+            <input [type]="showPassword ? 'text' : 'password'" id="password" formControlName="password"
+              placeholder="••••••••" class="form-input">
+            <button type="button" class="toggle-password" (click)="toggleShowPassword()" [title]="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+              <svg *ngIf="!showPassword" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg *ngIf="showPassword" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            </button>
+          </div>
+          <span class="error-message"
+            *ngIf="loginForm.get('password')?.touched && loginForm.get('password')?.hasError('required')">
+            La contraseña es requerida
+          </span>
+          <span class="error-message"
+            *ngIf="loginForm.get('password')?.touched && loginForm.get('password')?.hasError('minlength')">
+            Mínimo 6 caracteres
+          </span>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-submit" [disabled]="!loginForm.valid || isLoading">
+          {{ isLoading ? 'Cargando...' : 'Iniciar sesión' }}
+        </button>
+      </form>
+
+      <!-- Error Message -->
+      <div class="error-alert" *ngIf="errorMessage">
+        <p>{{ errorMessage }}</p>
+      </div>
+
+      <!-- Divider -->
+      <div class="divider"><span>o</span></div>
+
+      <!-- Links -->
+      <div class="links-section">
+        <p class="forgot-password">
+          <a href="javascript:void(0)" (click)="goToForgotPassword()">¿Olvidaste tu contraseña?</a>
+        </p>
+        <p class="no-account">
+          ¿No tienes cuenta?
+          <button type="button" (click)="goToRegister()" class="btn-text-link">
+            Regístrate aquí
+          </button>
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>

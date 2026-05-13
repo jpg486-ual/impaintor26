@@ -1,3 +1,76 @@
-/* You can add global styles to this file, and also import other style files */
+/* ============================
+   IMPAINTOR — Global Styles
+   ============================ */
 
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800;900&family=Nunito:wght@500;600;700;800;900&display=swap');
+
+/* ── Design Tokens ───────────────────────────────── */
+:root {
+  /* Palette */
+  --color-bg: #f5ead4;
+  /* warm parchment */
+  --color-bg-alt: #f0dfc0;
+  --color-surface: rgba(255, 252, 242, 0.72);
+  --color-surface-card: rgba(255, 252, 245, 0.88);
+
+  /* Paint splash accent colours */
+  --paint-red: #e84545;
+  --paint-orange: #f5a623;
+  --paint-yellow: #f6d84e;
+  --paint-teal: #2bbdb9;
+  --paint-blue: #2c72c0;
+  --paint-green: #52b788;
+  --paint-purple: #7c4dff;
+
+  /* Brand colours */
+  --gold: #f5a623;
+  --gold-dark: #e08a10;
+  --teal: #1d9e9a;
+  --teal-dark: #147370;
+  --navy: #1c2d55;
+
+  /* Typography */
+  --font-display: 'Baloo 2', cursive;
+  --font-body: 'Nunito', sans-serif;
+
+  font-family: var(--font-body);
+  color-scheme: only light;
+}
+
+/* ── Reset ───────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--navy);
+  overflow-x: hidden;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* ── Custom mouse cursor ─────────────────────────── */
+html,
+body,
+* {
+  cursor: url('/mouse-cursor.png') 0 0, auto !important;
+}
+
+input,
+textarea {
+  cursor: url('/mouse-cursor.png') 0 0, text !important;
+}
+
+button,
+a,
+[role="button"] {
+  cursor: url('/mouse-cursor.png') 0 0, pointer !important;
+}

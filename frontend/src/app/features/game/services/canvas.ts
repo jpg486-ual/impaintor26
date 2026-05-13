@@ -26,7 +26,7 @@ export class CanvasService {
   getBrushConfig(): Observable<BrushConfig> {
     return this.brushConfig.asObservable();
   }
-
+/* hola */
   getStrokeEmitter(): Observable<DrawingStroke> {
     return this.strokeEmitter.asObservable();
   }

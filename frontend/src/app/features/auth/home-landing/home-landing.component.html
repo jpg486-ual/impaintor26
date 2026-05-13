@@ -1,0 +1,43 @@
+<div class="landing-container">
+  <!-- Background decorative paint splashes -->
+  <div class="background-decoration"></div>
+
+  <div class="landing-content">
+    <!-- Logo Section -->
+    <div class="logo-section">
+      <div class="cat-circle-wrapper" aria-hidden="true">
+        <img class="circle-frame" src="/images/landing/circulo.png" alt="">
+        <img src="/images/landing/impaintor-cat-bike.png" alt="Gato en bicicleta" class="logo">
+      </div>
+      <img src="/images/landing/impaintor-title.png" alt="Impaintor" class="title-img">
+    </div>
+
+    <!-- Main Buttons -->
+    <div class="buttons-container">
+
+      <!-- Login -->
+      <button class="btn btn-login" (click)="goToLogin()" id="btn-iniciar-sesion">
+        <span class="btn-icon">👤</span>
+        <span class="btn-text">Iniciar sesión</span>
+      </button>
+
+      <!-- Forgot password -->
+      <p class="forgot-password-link">
+        <a href="javascript:void(0)" (click)="goToForgotPassword()">¿Olvidaste tu contraseña?</a>
+      </p>
+
+      <!-- Register -->
+      <button class="btn btn-register" (click)="goToRegister()" id="btn-registrarse">
+        <span class="btn-icon">👤</span>
+        <span class="btn-plus">+</span>
+        <span class="btn-text">Registrarse</span>
+      </button>
+
+      <!-- Tagline as Guest replacement -->
+      <div class="tagline">
+        <p>🎨 Dibuja, engaña y diviértete con tus amigos</p>
+      </div>
+
+    </div>
+  </div>
+</div>

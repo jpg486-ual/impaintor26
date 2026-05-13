@@ -1,0 +1,17 @@
+/* src/app/app.css */
+:host {
+    display: block;
+    min-height: 100vh;
+}
+
+/* * {
+  cursor: default;
+} */
+
+/* input, textarea, [contenteditable] {
+  cursor: text;
+} */
+
+/* button, a, [role="button"] {
+  cursor: pointer;
+} */
