@@ -22,6 +22,11 @@ export const routes: Routes = [
   // Game & Room Routes
   { path: 'room/create', component: CreateRoomComponent },
   { path: 'room/:code/lobby', component: Lobby },
+  {
+    path: 'room/:code/game',
+    loadComponent: () =>
+      import('./features/game/containers/game/game').then((m) => m.GameComponent),
+  },
   
   // Fallback
   { path: '**', redirectTo: '' }

@@ -19,6 +19,12 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+# Configuración JWT compartida por Track A (JwtService) y Track D (JwtTokenValidator)
+# para garantizar que firman/validan con la misma clave.
+jwt:
+  secret: ${IMPAINTOR_JWT_SECRET:dev-secret-change-me-dev-secret-change-me-dev-secret}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # 24h por defecto
+
 impaintor:
   realtime:
     broker:
@@ -28,8 +34,8 @@ impaintor:
       relay-login: ${SPRING_RABBITMQ_USERNAME:guest}
       relay-passcode: ${SPRING_RABBITMQ_PASSWORD:guest}
     jwt:
-      # PENDING — Track A debe firmar tokens con este mismo secret. En prod, sobreescribir vía env.
-      secret: ${IMPAINTOR_JWT_SECRET:dev-secret-change-me-dev-secret-change-me-dev-secret}
+      # Reutiliza el mismo secret raíz que Track A para que ambos firmen/validen igual.
+      secret: ${jwt.secret}
       issuer: impaintor
     websocket:
       endpoint: /ws

@@ -12,12 +12,17 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
+# JWT compartido por Track A (JwtService) y Track D (JwtTokenValidator) en tests.
+jwt:
+  secret: test-secret-test-secret-test-secret-test-secret-test
+  expiration-ms: 3600000
+
 impaintor:
   realtime:
     broker:
       mode: simple
     jwt:
-      secret: test-secret-test-secret-test-secret-test-secret-test
+      secret: ${jwt.secret}
       issuer: impaintor-test
     websocket:
       endpoint: /ws

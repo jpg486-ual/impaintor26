@@ -27,6 +27,9 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
+                // El handshake HTTP del WebSocket no pasa por filtros de auth — el JWT
+                // se valida en el frame STOMP CONNECT (ver Track D, JwtChannelInterceptor).
+                .requestMatchers("/ws/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/leaderboard").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated()
