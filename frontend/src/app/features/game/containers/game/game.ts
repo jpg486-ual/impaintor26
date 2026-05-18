@@ -152,6 +152,13 @@ export class GameComponent implements OnInit, OnDestroy {
     this.ws.send(`/app/room.${code}.vote`, { votedPlayerId });
   }
 
+  /** Envía el desempate del impostor al servidor. Invocado por TieBreakView.
+   *  TODO: confirmar path STOMP con Track H. */
+  protected sendVoteMove(votedPlayerId: number): void {
+    const code = this.route.snapshot.paramMap.get('code') ?? '';
+    this.ws.send(`/app/room.${code}.vote-move`, { votedPlayerId });
+  }
+
   /** Envía un intento de adivinación. Invocado por DrawingPhaseView (fallback impostor). */
   protected sendGuess(guess: string): void {
     const code = this.route.snapshot.paramMap.get('code') ?? '';

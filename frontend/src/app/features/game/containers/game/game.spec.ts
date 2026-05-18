@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { of } from 'rxjs';
+import { Subject, of } from 'rxjs';
 
 import { GameComponent } from './game';
 import { GameStateService } from '../../services/game-state';
@@ -140,5 +140,36 @@ describe('GameComponent', () => {
     fixture.detectChanges();
     fixture.destroy();
     expect(wsMock.disconnect).toHaveBeenCalled();
+  });
+
+  it('TieBreakView voteMoved llama ws.send con la ruta y payload correctos', () => {
+    configure(false, 'SALA');
+    authMock.getToken.mockReturnValue('fake-token');
+
+    const gameEvents$ = new Subject<any>();
+    const privateEvents$ = new Subject<any>();
+    wsMock.subscribe = vi.fn().mockImplementation((topic: string) => {
+      if (topic.endsWith('.game')) return gameEvents$.asObservable();
+      if (topic === '/user/queue/private') return privateEvents$.asObservable();
+      return of();
+    });
+
+    const fixture = TestBed.createComponent(GameComponent);
+    fixture.detectChanges();
+
+    privateEvents$.next({ type: 'ROLE_ASSIGNMENT', role: 'IMPOSTOR', hint: 'piano', lives: 1 });
+    gameEvents$.next({
+      type: 'VOTE_TIE',
+      tiedPlayers: [{ id: 7, votes: 2 }, { id: 13, votes: 2 }],
+      timeSeconds: 15,
+    });
+    fixture.detectChanges();
+
+    const card = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tied-player-7"]',
+    ) as HTMLButtonElement;
+    card.click();
+
+    expect(wsMock.send).toHaveBeenCalledWith('/app/room.SALA.vote-move', { votedPlayerId: 7 });
   });
 });
