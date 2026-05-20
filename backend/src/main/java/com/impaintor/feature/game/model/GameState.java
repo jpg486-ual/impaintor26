@@ -1,0 +1,119 @@
+package com.impaintor.feature.game.model;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.impaintor.feature.wordgroup.models.WordGroup;
+
+/**
+ * Estado de una partida activa.
+ * Contiene ronda actual, fase, orden de dibujo, jugadores vivos, votos,
+ * id del impostor, word group, palabra secreta, pista y vidas restantes del impostor.
+ */
+public class GameState {
+
+    public enum Phase { DRAWING, GALLERY, VOTING, TIE_BREAK, RESULT }
+
+    private int round = 1;
+    private Phase phase = Phase.DRAWING;
+
+    // Orden de dibujo
+    private final List<Long> drawingOrder = Collections.synchronizedList(new ArrayList<>());
+
+    // Jugadores vivos en la partida (IDs)
+    private final Set<Long> alivePlayers = ConcurrentHashMap.newKeySet();
+
+    // Mapa de votos: voterId -> votedPlayerId
+    private final Map<Long, Long> votes = new ConcurrentHashMap<>();
+
+    // Id del impostor
+    private Long impostorId;
+
+    // Grupo de palabras usado 
+    private WordGroup wordGroup;
+
+    // Palabra secreta y pista
+    private String secretWord;
+    private String hintWord;
+
+    // Vidas restantes del impostor
+    private int impostorLives = 1;
+
+    // Índice del dibujante actual dentro de drawingOrder
+    private int currentDrawerIndex = 0;
+
+    // --- Constructores ---
+    public GameState() {}
+
+    public GameState(List<Long> initialOrder, Collection<Long> initialPlayers) {
+        setDrawingOrder(initialOrder);
+        setAlivePlayers(initialPlayers);
+    }
+
+    // --- Getters / Setters ---
+    public int getRound() { return round; }
+    public void setRound(int round) { this.round = round; }
+
+    public Phase getPhase() { return phase; }
+    public void setPhase(Phase phase) { this.phase = phase; }
+
+    public List<Long> getDrawingOrder() { return Collections.unmodifiableList(drawingOrder); }
+    public void setDrawingOrder(Collection<Long> order) {
+        drawingOrder.clear();
+        if (order != null) drawingOrder.addAll(order);
+        this.currentDrawerIndex = 0;
+    }
+
+    public Set<Long> getAlivePlayers() { return Collections.unmodifiableSet(alivePlayers); }
+    public void setAlivePlayers(Collection<Long> ids) {
+        alivePlayers.clear();
+        if (ids != null) alivePlayers.addAll(ids);
+    }
+
+    public Map<Long, Long> getVotes() { return Collections.unmodifiableMap(votes); }
+    public void clearVotes() { votes.clear(); }
+
+    public Long getImpostorId() { return impostorId; }
+    public void setImpostorId(Long impostorId) { this.impostorId = impostorId; }
+
+    public WordGroup getWordGroup() { return wordGroup; }
+    public void setWordGroup(WordGroup wordGroup) { this.wordGroup = wordGroup; }
+
+    public String getSecretWord() { return secretWord; }
+    public void setSecretWord(String secretWord) { this.secretWord = secretWord; }
+
+    public String getHintWord() { return hintWord; }
+    public void setHintWord(String hintWord) { this.hintWord = hintWord; }
+
+    public int getImpostorLives() { return impostorLives; }
+    public void setImpostorLives(int impostorLives) { this.impostorLives = impostorLives; }
+
+    // --- Drawer index helpers ---
+    public int getCurrentDrawerIndex() { return currentDrawerIndex; }
+    public void setCurrentDrawerIndex(int idx) { this.currentDrawerIndex = idx; }
+
+    public Long getCurrentDrawer() {
+        synchronized (drawingOrder) {
+            if (drawingOrder.isEmpty()) return null;
+            if (currentDrawerIndex < 0 || currentDrawerIndex >= drawingOrder.size()) return null;
+            return drawingOrder.get(currentDrawerIndex);
+        }
+    }
+
+    public void advanceDrawer() { currentDrawerIndex++; }
+
+    // --- Vote helpers ---
+    public void recordVote(Long voterId, Long votedPlayerId) {
+        if (voterId == null) return;
+        if (votedPlayerId == null) {
+            votes.remove(voterId);
+        } else {
+            votes.put(voterId, votedPlayerId);
+        }
+    }
+
+    // --- Utility ---
+    public boolean isPlayerAlive(Long playerId) { return alivePlayers.contains(playerId); }
+    public void eliminatePlayer(Long playerId) { alivePlayers.remove(playerId); }
+
+}
