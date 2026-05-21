@@ -43,11 +43,8 @@ public class GameLogicServiceTest {
     void testRound1Tie() {
         mockState.setCurrentRound(1);
         mockState.setImpostorId(1L);
-        // Añadimos los jugadores vivos por precaución
         mockState.setAlivePlayerId(List.of(1L, 2L, 3L, 4L));
 
-        // CORRECCIÓN: Ahora sí es un empate real (Jugador 1 tiene 2 votos, Jugador 2
-        // tiene 2 votos)
         Map<Long, Long> votes = Map.of(
                 1L, 1L,
                 2L, 1L,
@@ -185,12 +182,9 @@ public class GameLogicServiceTest {
     @Test
     void testApplyEliminationAndAdvanceRound() {
         mockState.setCurrentRound(1);
-        // Supongamos que quedan 4 jugadores (1, 2, 3, 4) y el impostor es el 99 (no
-        // está en la lista de vivos por simplificar, o digamos que el 4 es el impostor)
         mockState.setImpostorId(4L);
         mockState.setAlivePlayerId(new java.util.ArrayList<>(java.util.List.of(1L, 2L, 3L, 4L))); // Lista mutable
 
-        // Simulamos que la votación decidió echar al jugador 2 (un pintor)
         VoteResult resultFromVoting = VoteResult.builder()
                 .nobodyEliminated(false)
                 .eliminatedPlayerId(2L)
@@ -199,10 +193,8 @@ public class GameLogicServiceTest {
 
         gameLogicService.applyRoundResult(mockState, resultFromVoting);
 
-        // El jugador 2 debe desaparecer de los vivos
         assertFalse(mockState.getAlivePlayerId().contains(2L));
         assertEquals(3, mockState.getAlivePlayerId().size());
-        // La ronda debe avanzar a 2
         assertEquals(2, mockState.getCurrentRound());
     }
 
@@ -210,21 +202,16 @@ public class GameLogicServiceTest {
     void testImpostorWinsIfOnlyOnePainterLeft() {
         mockState.setCurrentRound(3);
         mockState.setImpostorId(4L);
-        // Quedan 3 jugadores.
         mockState.setAlivePlayerId(new java.util.ArrayList<>(java.util.List.of(1L, 3L, 4L)));
 
-        // Se elimina al jugador 3
         VoteResult resultFromVoting = VoteResult.builder()
                 .nobodyEliminated(false)
                 .eliminatedPlayerId(3L)
                 .isGameOver(false)
                 .build();
 
-        // Aplicamos el resultado
         VoteResult finalResult = gameLogicService.applyRoundResult(mockState, resultFromVoting);
 
-        // Como solo quedan el 1 y el 4 (Pintor vs Impostor), el impostor gana
-        // automáticamente
         assertTrue(finalResult.isGameOver());
         assertEquals("IMPAINTOR", finalResult.getWinner());
     }
