@@ -112,13 +112,21 @@ export class GameComponent implements OnInit, OnDestroy {
   }
 
   private connectWebSocket(code: string, token: string): void {
+    console.log('[Game] connectWebSocket — WS status before connect:', this.ws.currentStatus);
     this.ws.connect({ url: '/ws', jwt: token });
     this.connectedToWs = true;
+    console.log('[Game] connectWebSocket — WS status after connect():', this.ws.currentStatus);
 
     this.ws
       .subscribe<GameEvent>(`/topic/room.${code}.game`)
       .pipe(takeUntil(this.destroy$))
-      .subscribe((ev) => this.gameState.applyEvent(ev));
+      .subscribe({
+        next: (ev) => {
+          console.log('[Game] game event received:', (ev as GameEvent & { type: string }).type, ev);
+          this.gameState.applyEvent(ev);
+        },
+        error: (err) => console.error('[Game] game topic error:', err),
+      });
 
     this.ws
       .subscribe<DrawBroadcast>(`/topic/room.${code}.draw`)
@@ -128,11 +136,14 @@ export class GameComponent implements OnInit, OnDestroy {
     this.ws
       .subscribe<RoleAssignment>('/user/queue/private')
       .pipe(takeUntil(this.destroy$))
-      .subscribe((msg) => {
-        if (msg.type === 'ROLE_ASSIGNMENT') {
-          this.gameState.applyRoleAssignment(msg);
-        }
-        // GuessResult del impostor: lo deja al GameStateService como mejora futura.
+      .subscribe({
+        next: (msg) => {
+          console.log('[Game] private message received:', msg);
+          if (msg.type === 'ROLE_ASSIGNMENT') {
+            this.gameState.applyRoleAssignment(msg);
+          }
+        },
+        error: (err) => console.error('[Game] private queue error:', err),
       });
   }
 
