@@ -2,6 +2,7 @@ package com.impaintor.feature.game.service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -177,7 +178,7 @@ public class GameService {
                     .orElse(30);
 
             gs.setPhase(GameState.Phase.DRAWING);
-            realtimePublisher.publishGameEvent(roomCode, new GameEvent.TurnStart(drawer, timeSeconds));
+            realtimePublisher.publishGameEvent(roomCode, new GameEvent.TurnStart(drawer, timeSeconds, gs.getDrawingOrder()));
 
             // schedule end of turn
             ScheduledFuture<?> f = scheduler.schedule(() -> endTurn(roomCode, drawer), timeSeconds, TimeUnit.SECONDS);
@@ -261,6 +262,8 @@ public class GameService {
         if (prev != null) prev.cancel(false);
     }
 
+    private static final int VOTE_SECONDS = 30;
+
     private void startVotePhase(String roomCode) {
         GameState gs = activeGames.get(roomCode);
         if (gs == null) return;
@@ -268,7 +271,88 @@ public class GameService {
         synchronized (gs) {
             gs.setPhase(GameState.Phase.VOTING);
             gs.clearCanvasSnapshots();
-            realtimePublisher.publishGameEvent(roomCode, new GameEvent.VotePhase(30));
+            gs.clearVotes();
+            realtimePublisher.publishGameEvent(roomCode, new GameEvent.VotePhase(VOTE_SECONDS));
+
+            ScheduledFuture<?> f = scheduler.schedule(() -> resolveVoting(roomCode), VOTE_SECONDS, TimeUnit.SECONDS);
+            ScheduledFuture<?> prev = scheduledTasks.put(roomCode, f);
+            if (prev != null) prev.cancel(false);
+        }
+    }
+
+    private void resolveVoting(String roomCode) {
+        GameState gs = activeGames.get(roomCode);
+        if (gs == null) return;
+
+        synchronized (gs) {
+            if (gs.getPhase() != GameState.Phase.VOTING) return;
+
+            ScheduledFuture<?> scheduled = scheduledTasks.remove(roomCode);
+            if (scheduled != null) scheduled.cancel(false);
+
+            // Tally votes
+            Map<Long, Long> tally = new HashMap<>();
+            for (Long votedId : gs.getVotes().values()) {
+                tally.merge(votedId, 1L, Long::sum);
+            }
+
+            // Find top candidate (no tie-break for now — tie = no elimination)
+            Long eliminated = null;
+            long maxVotes = 0;
+            boolean tie = false;
+            for (Map.Entry<Long, Long> entry : tally.entrySet()) {
+                if (entry.getValue() > maxVotes) {
+                    maxVotes = entry.getValue();
+                    eliminated = entry.getKey();
+                    tie = false;
+                } else if (entry.getValue() == maxVotes) {
+                    tie = true;
+                }
+            }
+            if (tie) eliminated = null;
+
+            boolean wasImpostor = eliminated != null && eliminated.equals(gs.getImpostorId());
+            if (eliminated != null) gs.eliminatePlayer(eliminated);
+            gs.clearVotes();
+
+            Long finalEliminated = eliminated;
+            realtimePublisher.publishGameEvent(roomCode,
+                    new GameEvent.VoteResult(finalEliminated, wasImpostor, List.of()));
+
+            if (wasImpostor) {
+                realtimePublisher.publishGameEvent(roomCode,
+                        new GameEvent.GameOver("PAINTERS", "VOTED_OUT", gs.getImpostorId(), gs.getSecretWord()));
+                activeGames.remove(roomCode);
+                return;
+            }
+
+            // Impostor wins if only 2 or fewer players remain
+            if (gs.getAlivePlayers().size() <= 2) {
+                realtimePublisher.publishGameEvent(roomCode,
+                        new GameEvent.GameOver("IMPOSTOR", "LAST_STANDING", gs.getImpostorId(), gs.getSecretWord()));
+                activeGames.remove(roomCode);
+                return;
+            }
+
+            // Start new round after a short pause to let clients see the result
+            int newRound = gs.getRound() + 1;
+            gs.setRound(newRound);
+            List<Long> aliveOrder = new ArrayList<>(gs.getDrawingOrder());
+            aliveOrder.removeIf(id -> !gs.isPlayerAlive(id));
+            gs.setDrawingOrder(aliveOrder);
+
+            scheduler.schedule(() -> startNewRound(roomCode, newRound), 4, TimeUnit.SECONDS);
+        }
+    }
+
+    private void startNewRound(String roomCode, int round) {
+        GameState gs = activeGames.get(roomCode);
+        if (gs == null) return;
+
+        synchronized (gs) {
+            realtimePublisher.publishGameEvent(roomCode,
+                    new GameEvent.NewRound(round, gs.getDrawingOrder()));
+            startNextTurn(roomCode);
         }
     }
 }

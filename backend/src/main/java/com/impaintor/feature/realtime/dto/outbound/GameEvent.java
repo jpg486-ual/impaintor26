@@ -30,7 +30,7 @@ public sealed interface GameEvent {
 
     record GameStart(List<Long> drawingOrder, int round) implements GameEvent {}
 
-    record TurnStart(Long playerId, int timeSeconds) implements GameEvent {}
+    record TurnStart(Long playerId, int timeSeconds, List<Long> drawingOrder) implements GameEvent {}
 
     record TurnEnd(Long playerId) implements GameEvent {}
 

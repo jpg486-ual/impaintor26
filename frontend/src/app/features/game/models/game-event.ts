@@ -19,11 +19,11 @@ export type Winner = 'PAINTERS' | 'IMPOSTOR';
 /** Discriminated union de todos los eventos del juego que el servidor difunde a /topic/room.{code}.game. */
 export type GameEvent =
   | { type: 'GAME_START'; drawingOrder: number[]; round: number }
-  | { type: 'TURN_START'; playerId: number; timeSeconds: number }
+  | { type: 'TURN_START'; playerId: number; timeSeconds: number; drawingOrder: number[] }
   | { type: 'TURN_END'; playerId: number }
   | { type: 'GALLERY_PHASE' }
   | { type: 'VOTE_PHASE'; timeSeconds: number }
-  | { type: 'VOTE_RESULT'; eliminated: number; wasImpostor: boolean; topVoted: TopVote[] }
+  | { type: 'VOTE_RESULT'; eliminated: number | null; wasImpostor: boolean; topVoted: TopVote[] }
   | { type: 'VOTE_TIE'; tiedPlayers: TopVote[]; timeSeconds: number }
   | { type: 'GUESS_ATTEMPT'; livesRemaining: number; correct: boolean }
   | { type: 'NEW_ROUND'; round: number; drawingOrder: number[] }
