@@ -98,6 +98,8 @@ public class GameService {
 
         activeGames.put(roomCode, gameState);
 
+        realtimePublisher.publishGameEvent(roomCode, new GameEvent.GameStart(drawingOrder, 1));
+
         // start the first turn cycle
         startNextTurn(roomCode);
 

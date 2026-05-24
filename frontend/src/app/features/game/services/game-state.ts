@@ -62,7 +62,7 @@ export class GameStateService {
       case 'GAME_START':
         return { ...s, phase: 'DRAWING', round: e.round, drawingOrder: e.drawingOrder };
       case 'TURN_START':
-        return { ...s, currentDrawerId: e.playerId, timeRemainingSec: e.timeSeconds };
+        return { ...s, phase: s.phase === 'CONNECTING' ? 'DRAWING' : s.phase, currentDrawerId: e.playerId, timeRemainingSec: e.timeSeconds };
       case 'TURN_END':
         return { ...s, currentDrawerId: null };
       case 'GALLERY_PHASE':
