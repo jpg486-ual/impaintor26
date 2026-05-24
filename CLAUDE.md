@@ -681,3 +681,114 @@ Esta es una posible distribución. Ajustar según las habilidades y preferencias
 | P7 | G — Componente Canvas | H — Soporte/testing | K — Calidad de código |
 
 Cada persona posee un área diferenciada en la Fase 1, lo que significa conflictos de git mínimos. La Fase 2 requiere colaboración más estrecha ya que los tracks H e I están profundamente conectados, por lo que se recomienda trabajar en parejas.
+
+---
+
+## 11. Bugs Conocidos y Trabajo Pendiente de Integración
+
+Este apartado documenta los fallos y carencias detectadas durante las pruebas de la partida completa (ranked, 5 jugadores). Se mantiene aquí para que el equipo los retome en la próxima sesión.
+
+### 11.1 Palabras Incorrectas en Partida
+
+**Síntoma:** Las palabras que ven los jugadores durante la partida no son las del archivo `backend/src/main/resources/data/word_groups.csv`. Se usan palabras de test antiguas almacenadas en la base de datos de desarrollo local.
+
+**Causa probable:** No existe un mecanismo de seed automático que cargue el CSV al arrancar. Los grupos de palabras se insertaron manualmente durante el desarrollo temprano y esos datos persisten en la BD. `WordGroupRepository.findRandom()` saca una fila aleatoria de lo que haya en la tabla, sin distinguir origen.
+
+**Solución pendiente:** Implementar un `DataLoader` o `ApplicationRunner` de Spring Boot que lea el CSV al arrancar (solo si la tabla `word_groups` está vacía) e inserte los grupos. Alternativamente, crear un script SQL de seed que se ejecute como migración. Limpiar los datos de test de la BD antes del demo.
+
+---
+
+### 11.2 Los Votos No Tienen Efecto
+
+**Síntoma:** Durante la fase de votación todos los jugadores pueden hacer clic en una tarjeta para votar, pero ningún jugador es expulsado cuando termina el temporizador de 30 segundos.
+
+**Causa raíz:** `GameService.resolveVoting()` talla los votos leyendo `gs.getVotes()`, pero este mapa **nunca se rellena**. El endpoint STOMP `/app/room.{code}.vote` llega al `GameInputWebSocketController`, que delega en `GameInputHandler` / `LoggingGameInputHandler`. Ninguno de estos handlers llama a `gs.recordVote(voterId, votedPlayerId)` todavía — la lógica de registrar votos en el `GameState` no está implementada.
+
+**Solución pendiente:** En el handler de votos (`GameInputHandler` o directamente en el controller) obtener el `GameState` activo de `GameService.findActiveGame(roomCode)` y llamar a `gs.recordVote(voterId, votedId)`. El `voterId` debe extraerse del principal STOMP autenticado (no del payload del cliente, para evitar suplantación).
+
+---
+
+### 11.3 Auto-voto No Implementado
+
+**Síntoma:** Según las reglas (sección 2.3), los jugadores que no voten dentro del tiempo límite deben contar como si se hubieran votado a sí mismos. Este comportamiento no ocurre.
+
+**Causa raíz:** `resolveVoting()` solo talla los votos que existen en `gs.getVotes()`. No itera sobre los jugadores vivos para detectar quién no votó y añadir su auto-voto antes de calcular el resultado.
+
+**Solución pendiente:** Al inicio de `resolveVoting()`, antes de tallar, iterar sobre `gs.getAlivePlayers()`. Para cualquier jugador que no tenga un voto registrado en `gs.getVotes()`, registrar `gs.recordVote(playerId, playerId)` (vota por sí mismo). Después aplicar la regla de la ronda 1 (voto opcional, empate = nadie eliminado).
+
+---
+
+### 11.4 Fase de Dibujo Rota en Ronda 2+
+
+**Síntoma:** En la segunda ronda nadie puede dibujar. El canvas no responde aunque sea el turno del jugador.
+
+**Causa probable:** `SpectatorCanvasService` acumula los trazos de todos los turnos de la ronda anterior sin limpiarse al iniciar una nueva ronda. Cuando el `CanvasComponent` activo recibe nuevos trazos, los renderiza sobre el canvas sucio del turno previo, o el estado de "turno activo" queda bloqueado. Secundariamente, `startNewRound()` en `GameService` llama a `startNextTurn()` dentro de un bloque `synchronized(gs)` — si `startNextTurn()` también intenta sincronizar sobre el mismo objeto, hay riesgo de deadlock o reentrada inesperada.
+
+**Solución pendiente:**
+- `SpectatorCanvasService` debe escuchar el evento `NEW_ROUND` (ya propagado por `GameStateService.gameEvents$`) y limpiar todos los snapshots acumulados.
+- Verificar que `startNewRound()` no produce deadlock al llamar a `startNextTurn()` desde dentro del mismo `synchronized(gs)`.
+- El `CanvasComponent` local (el del jugador activo) también debe limpiarse entre turnos; comprobar que el componente se resetea al cambiar `currentDrawerId`.
+
+---
+
+### 11.5 Desincronización de Fase entre Jugadores
+
+**Síntoma:** Algunos jugadores ven la fase de votación mientras otros siguen en la fase de dibujo o galería. Las transiciones de fase no llegan a todos al mismo tiempo.
+
+**Causa probable (múltiple):**
+1. **`GALLERY_PHASE` no es un `GameEvent`** — se envía como `GalleryPhaseEvent` directamente con `messagingTemplate.convertAndSend()`, no a través de `realtimePublisher.publishGameEvent()`. Aunque el JSON resultante incluye `"type":"GALLERY_PHASE"`, algunos clientes podrían no recibirlo si llegan tarde o si el broker lo descarta antes de que suscriban.
+2. **Timing entre `endTurn` y `enterGalleryPhase`** — `endTurn()` avanza al siguiente dibujante y comprueba si hay más jugadores. Si no los hay, llama a `enterGalleryPhase()` dentro del mismo `synchronized`. Esta cadena síncrona puede hacer que `GALLERY_PHASE` y `VOTE_PHASE` lleguen muy juntos, y si el cliente aún está procesando `TURN_END`, puede perderse la transición de galería y saltar directamente a votación.
+
+**Solución pendiente:**
+- Unificar el envío de `GALLERY_PHASE` usando `realtimePublisher.publishGameEvent()` en lugar de `messagingTemplate` directo. Mover el snapshot payload a un campo separado o enviarlo como mensaje adicional.
+- Añadir un pequeño retraso (1–2 s) entre `GALLERY_PHASE` y el inicio del temporizador de votación, para que todos los clientes tengan tiempo de transicionar a la vista de galería antes de que llegue `VOTE_PHASE`.
+
+---
+
+### 11.6 Galería Muestra Solo para Algunos Jugadores y Dibujos Superpuestos
+
+**Síntoma:** La vista de galería no aparece para todos los jugadores a la vez (relacionado con 11.5). Cuando sí aparece, los dibujos de diferentes jugadores se renderizan superpuestos en lugar de mostrarse en una cuadrícula.
+
+**Causa del solapamiento:** `SpectatorCanvasService` almacena los trazos de **todos los jugadores de todos los turnos** en el mismo mapa de snapshots. La `GalleryView` los pinta todos sobre el mismo canvas o no los separa correctamente por jugador. El CSS de `gallery-view` puede estar usando posicionamiento absoluto o sin grid, haciendo que todas las miniaturas se apilen.
+
+**Solución pendiente:**
+- `SpectatorCanvasService` debe generar un snapshot (data URL) al final de cada turno (cuando llega `TURN_END`) y almacenarlo en `snapshots[playerId]`. El canvas espectador activo debe limpiarse al comenzar el siguiente turno.
+- `GalleryView` debe renderizar cada snapshot en su propia celda de grid. Revisar `gallery-view.css` para asegurar que el layout es `display: grid` con `grid-template-columns` correcto.
+- El backend debería recibir el snapshot final del canvas activo (enviado por el cliente dibujante al terminar su turno vía `recordCanvasSnapshot`) para poder reenviarlos en `GalleryPhaseEvent` como respaldo si el cliente espectador no tiene el snapshot local.
+
+---
+
+### 11.7 UI de las Vistas de Juego No Coincide con el Diseño del Resto de la App
+
+**Síntoma:** Las vistas de gameplay (`DrawingPhaseView`, `GalleryView`, `VotingView`, `TieBreakView`, `VoteResultView`, `GameOverView`) tienen un estilo visual completamente diferente al del resto de la aplicación (lobby, home, login, matchmaking).
+
+**Causa:** Estas vistas fueron desarrolladas de forma independiente por Track I centrado en la funcionalidad, sin aplicar el sistema de diseño del proyecto (variables CSS, componentes compartidos, tipografía, paleta de colores).
+
+**Solución pendiente (Track K — 3K.1):** Aplicar el esquema de colores, fuentes y componentes (`GameBackgroundComponent`, clases `.btn`, variables CSS) a todas las vistas de juego. El juego debería verse como una extensión visual del lobby y el home, no como un prototipo separado. Prioridad media — no bloquea funcionalidad pero es importante para el demo.
+
+---
+
+### 11.8 Creación de Sala Personalizada No Funciona
+
+**Síntoma:** Al pulsar "CREAR SALA" en el formulario de creación de sala personalizada, aparece un spinner de carga indefinido. La sala nunca llega a crearse. Si el usuario navega a otra página y vuelve, aparece el mensaje "Error al crear la sala / Error creating room".
+
+**Causa raíz probable:** Discordancia entre el path del endpoint en frontend y backend. El backend expone `POST /api/rooms/create` (ver `RoomController.createRoom()`), pero el servicio frontend `RoomService.createRoom()` probablemente llama a `POST /api/rooms` (sin el segmento `/create`). Esto resulta en un 404, que el componente de creación de sala interpreta como error y muestra el mensaje. Pendiente de confirmar leyendo `frontend/src/app/core/services/room.service.ts` y `frontend/src/app/features/room/create-room/`.
+
+**Solución pendiente:** Alinear el path. La opción más limpia es cambiar el backend para que el endpoint sea `POST /api/rooms` (sin `/create`), ya que es más RESTful y coincide con lo que el frontend espera. Comprobar también que el objeto de respuesta del backend incluye el `roomCode` en el campo que el componente de creación espera (el componente usa un fallback `response.roomCode || response.code || Object.values(response)[0]`, así que el campo exacto importa).
+
+---
+
+### 11.9 Fase de Desempate del Impostor No Se Activa
+
+**Síntoma:** Cuando la votación termina en empate (dos o más jugadores con el mismo número de votos), la fase de desempate (`TieBreakView`) no aparece. La partida simplemente avanza a la siguiente ronda sin eliminar a nadie, sin dar al impostor la oportunidad de mover su voto.
+
+**Causa raíz (doble):**
+1. **Los votos nunca se registran** (ver bug 11.2) — `gs.getVotes()` está siempre vacío, así que la detección de empate en `resolveVoting()` nunca se activa porque no hay votos que contar. Una vez se implemente 11.2, el empate sí podría ocurrir.
+2. **`resolveVoting()` no emite `VOTE_TIE`** — cuando detecta un empate (`tie = true`), simplemente pone `eliminated = null` y emite `VOTE_RESULT` directamente. No emite `GameEvent.VoteTie` ni cambia la fase del `GameState` a `TIE_BREAK`. El cliente nunca recibe el evento `VOTE_TIE`, por lo que el reducer nunca transiciona a la fase `'TIE_BREAK'` y la `TieBreakView` no se muestra.
+
+**Solución pendiente:** En `resolveVoting()`, cuando `tie == true` (en ronda 2+, según spec §2.3), en lugar de emitir `VOTE_RESULT` inmediatamente:
+1. Emitir `GameEvent.VoteTie(tiedPlayers, timeSeconds)` con los jugadores empatados y un tiempo límite (ej. 15 s).
+2. Guardar en `GameState` los jugadores empatados.
+3. Programar un `ScheduledFuture` que, si el impostor no mueve su voto antes del timeout, llame a un método `resolveTieTimeout()` que expulse al impostor automáticamente (`GAME_OVER` con `reason: "TIE_NOT_BROKEN"`).
+4. Exponer un endpoint STOMP `/app/room.{code}.vote-move` que el impostor use para mover su voto; ese handler cancela el timer y resuelve el empate con el nuevo voto del impostor.
+El frontend ya tiene `TieBreakView` implementada y `GameComponent.sendVoteMove()` conectado — solo falta la lógica del lado del servidor.
