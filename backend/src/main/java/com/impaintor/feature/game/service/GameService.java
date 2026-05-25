@@ -110,16 +110,24 @@ public class GameService implements GameInputHandler {
 
         realtimePublisher.publishGameEvent(roomCode, new GameEvent.GameStart(drawingOrder, 1));
 
-        // start the first turn cycle
-        startNextTurn(roomCode);
-
         room.setWordGroup(wordGroup);
         room.setSecretWord(secretWord);
         room.setHintWord(hintWord);
         room.setGameState(Room.GameState.PLAYING);
         roomRepository.save(room);
 
-        sendRoleAssignments(players, gameState);
+        // Delay role assignments and first turn so all clients have time to navigate
+        // from the lobby to /game and re-subscribe before TURN_START arrives.
+        // Without this delay, the lobby's still-active subscription consumes TURN_START
+        // and GameComponent never sees it, causing the first drawer to be skipped.
+        final List<User> playerSnapshot = List.copyOf(players);
+        ScheduledFuture<?> f = scheduler.schedule(() -> {
+            sendRoleAssignments(playerSnapshot, gameState);
+            startNextTurn(roomCode);
+        }, 3, TimeUnit.SECONDS);
+        ScheduledFuture<?> prev = scheduledTasks.put(roomCode, f);
+        if (prev != null) prev.cancel(false);
+
         return gameState;
     }
 
