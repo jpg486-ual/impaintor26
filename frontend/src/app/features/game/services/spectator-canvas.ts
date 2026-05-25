@@ -65,7 +65,7 @@ export class SpectatorCanvasService {
     this.updateSnapshot(stroke.playerId, canvas);
   }
 
-  /** Limpia el canvas del jugador y actualiza snapshot. */
+  /** Limpia el canvas del jugador (rellena blanco) y actualiza snapshot. */
   clearPlayer(playerId: number): void {
     if (!isPlatformBrowser(this.platformId)) return;
 
@@ -75,7 +75,8 @@ export class SpectatorCanvasService {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     this.updateSnapshot(playerId, canvas);
   }
 
