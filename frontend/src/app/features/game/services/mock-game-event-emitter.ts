@@ -101,11 +101,11 @@ export class MockGameEventEmitter {
 
     const script: { delay: number; ev: GameEvent }[] = [
       { delay: 0,  ev: { type: 'GAME_START', drawingOrder, round: 1 } },
-      { delay: 1,  ev: { type: 'TURN_START', playerId: 7,  timeSeconds: 5 } },
+      { delay: 1,  ev: { type: 'TURN_START', playerId: 7,  timeSeconds: 5, drawingOrder } },
       { delay: 2,  ev: { type: 'TURN_END',   playerId: 7 } },
-      { delay: 3,  ev: { type: 'TURN_START', playerId: 13, timeSeconds: 5 } },
+      { delay: 3,  ev: { type: 'TURN_START', playerId: 13, timeSeconds: 5, drawingOrder } },
       { delay: 4,  ev: { type: 'TURN_END',   playerId: 13 } },
-      { delay: 5,  ev: { type: 'TURN_START', playerId: 42, timeSeconds: 5 } },
+      { delay: 5,  ev: { type: 'TURN_START', playerId: 42, timeSeconds: 5, drawingOrder } },
       { delay: 6,  ev: { type: 'TURN_END',   playerId: 42 } },
       { delay: 7,  ev: { type: 'GALLERY_PHASE' } },
       // Intento fallido — el overlay hace shake y pierde una vida
@@ -121,9 +121,9 @@ export class MockGameEventEmitter {
         },
       },
       { delay: 11, ev: { type: 'NEW_ROUND', round: 2, drawingOrder: [13, 42] } },
-      { delay: 12, ev: { type: 'TURN_START', playerId: 13, timeSeconds: 5 } },
+      { delay: 12, ev: { type: 'TURN_START', playerId: 13, timeSeconds: 5, drawingOrder: [13, 42] } },
       { delay: 13, ev: { type: 'TURN_END',   playerId: 13 } },
-      { delay: 14, ev: { type: 'TURN_START', playerId: 42, timeSeconds: 5 } },
+      { delay: 14, ev: { type: 'TURN_START', playerId: 42, timeSeconds: 5, drawingOrder: [13, 42] } },
       { delay: 15, ev: { type: 'TURN_END',   playerId: 42 } },
       { delay: 16, ev: { type: 'GALLERY_PHASE' } },
       // Intento correcto — el impostor gana
