@@ -1,12 +1,13 @@
-import { Component, EventEmitter, Output, computed, input, signal } from '@angular/core';
+import { Component, EventEmitter, Output, computed, inject, input, signal } from '@angular/core';
 
 import { GameState } from '../../models/game-state';
+import { SpectatorCanvasService } from '../../services/spectator-canvas';
 
 /**
  * 2I.5 — Vista de desempate.
  *
- * Muestra los jugadores empatados. El impostor puede mover su voto a uno
- * de ellos para romper el empate; los demás ven un estado pasivo de espera.
+ * Muestra los jugadores empatados con sus dibujos. El impostor puede mover
+ * su voto a uno de ellos para romper el empate; los demás ven estado pasivo.
  */
 @Component({
   selector: 'app-tie-break-view',
@@ -21,9 +22,14 @@ export class TieBreakView {
 
   @Output() voteMoved = new EventEmitter<number>();
 
+  protected readonly spectator = inject(SpectatorCanvasService);
   protected readonly myMove = signal<number | null>(null);
 
   protected readonly isImpostor = computed(() => this.state().myRole === 'IMPOSTOR');
+
+  protected snapshotFor(playerId: number): string | null {
+    return this.spectator.snapshots()[playerId] ?? null;
+  }
 
   protected onCardClick(playerId: number): void {
     if (!this.isImpostor()) return;

@@ -1,2 +1,160 @@
-.phase-placeholder { padding: 1rem; border: 2px dashed #999; border-radius: 8px; background: #fafafa; }
-.phase-placeholder pre { font-size: 0.75rem; background: #eee; padding: 0.5rem; border-radius: 4px; overflow-x: auto; }
+.tie-break-view {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+  padding: 1.25rem;
+}
+
+.phase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.phase-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  background: #dc2626;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.875rem;
+}
+
+.instructions {
+  margin-bottom: 1rem;
+}
+
+.impostor-prompt {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.waiting-prompt {
+  color: #555;
+}
+
+.vote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+/* Clickable card — impostor only */
+.vote-card {
+  background: #fff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: center;
+  font-family: inherit;
+}
+
+.vote-card:hover:not(:disabled) {
+  border-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 38, 38, 0.15);
+}
+
+.vote-card.voted {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.vote-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vote-card:disabled {
+  cursor: default;
+}
+
+/* Read-only card — non-impostor players */
+.tied-readonly {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.player-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.self-marker {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.vote-count-badge {
+  display: inline-block;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.6rem;
+  align-self: center;
+}
+
+.vote-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.no-drawing {
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 4px;
+  color: #999;
+  font-size: 0.875rem;
+}
+
+.vote-marker {
+  background: #10b981;
+  color: white;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.confirmation {
+  margin-top: 1rem;
+  text-align: center;
+  color: #10b981;
+  font-weight: 600;
+}
