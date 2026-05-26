@@ -57,7 +57,7 @@
 
     <!-- Controles -->
     <footer class="lobby-footer">
-      <button routerLink="/main_menu" class="btn btn-secondary">Salir de Sala</button>
+      <button (click)="leaveRoom()" class="btn btn-secondary">Salir de Sala</button>
 
       @if (isRanked()) {
         <!-- Ranked: auto-start countdown -->

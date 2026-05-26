@@ -41,8 +41,14 @@ export class CreateRoomComponent {
         this.isLoading = false;
         // Dependiendo del backend puede venir como roomCode o code
         const code = response.roomCode || response.code || Object.values(response)[0];
-        // Idealmente redirigir al lobby, pero si no está usamos la misma ruta que hay disponible o asumimos q se hará
-        this.router.navigate(['/room', code, 'lobby']);
+        // Auto-join the room right after creating it
+        this.roomService.joinRoom(code).subscribe({
+          next: () => this.router.navigate(['/room', code, 'lobby']),
+          error: (err) => {
+            console.error('Failed to auto-join room', err);
+            this.router.navigate(['/room', code, 'lobby']);
+          }
+        });
       },
       error: (err) => {
         this.isLoading = false;
