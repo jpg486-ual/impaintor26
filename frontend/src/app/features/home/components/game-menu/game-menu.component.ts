@@ -66,7 +66,7 @@ export type GameAction = 'create-private' | 'find-ranked' | 'join-room';
           <p>Introduce el código proporcionado por el anfitrión:</p>
           <input
             type="text"
-            maxlength="6"
+            maxlength="7"
             [(ngModel)]="roomCode"
             placeholder="Código de sala"
             class="room-code-input"

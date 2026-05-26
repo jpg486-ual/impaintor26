@@ -6,7 +6,7 @@ import { WebSocketService } from '../../../core/services/websocket.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { Subscription } from 'rxjs';
 import { GameBackgroundComponent } from '../../../shared/components/game-background/game-background.component';
-import { RoomConfig } from '../../../core/services/room.service';
+import { RoomConfig, RoomService } from '../../../core/services/room.service';
 
 export interface Player {
   username: string;
@@ -53,6 +53,8 @@ export class Lobby implements OnInit, OnDestroy {
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private countdownInterval: ReturnType<typeof setInterval> | null = null;
   private myUserId: number | null = null;
+  private navigatingToGame = false;
+  private roomService = inject(RoomService);
 
   ngOnInit() {
     const token = this.authService.getToken();
@@ -68,10 +70,15 @@ export class Lobby implements OnInit, OnDestroy {
       next: (room) => {
         if (room.size) this.roomSize.set(room.size);
 
-        // Map backend User objects to lobby Player interface
+        // Map backend User objects to lobby Player interface. The creator/first to join is host.
         this.players.set(
-          room.playersNames.map(u => ({ username: u.username, isHost: false }))
+          room.playersNames.map((u, index) => ({ username: u.username, isHost: index === 0 }))
         );
+
+        const currentUser = this.authService.getCurrentUser();
+        if (currentUser && room.playersNames.length > 0 && room.playersNames[0].username === currentUser.username) {
+          this.isHost.set(true);
+        }
 
         if (room.mode === 'RANKED') {
           this.isRanked.set(true);
@@ -84,18 +91,22 @@ export class Lobby implements OnInit, OnDestroy {
       },
     });
 
-    // WS subscription for lobby updates (custom rooms) — unchanged behavior
+    // WS subscription for lobby updates
     this.wsSubscription = this.wsService
-      .subscribe<{ players?: Player[]; config?: RoomConfig }>(`/topic/room.${this.roomCode}.lobby`)
+      .subscribe<any>(`/topic/room.${this.roomCode}.lobby`) // Use dot notation matching RabbitMQ standard
       .subscribe({
-        next: (data) => {
-          if (data.players) this.players.set(data.players);
-          if (data.config) this.roomConfig.set(data.config);
+        next: (room) => {
+          if (room.playersNames) {
+            this.players.set(
+              room.playersNames.map((u: any, index: number) => ({ username: u.username, isHost: index === 0 }))
+            );
 
-          const currentUsername = localStorage.getItem('username') || '';
-          const hostPlayer = this.players().find(p => p.isHost);
-          if (hostPlayer && hostPlayer.username === currentUsername) {
-            this.isHost.set(true);
+            const currentUser = this.authService.getCurrentUser();
+            if (currentUser && room.playersNames.length > 0 && room.playersNames[0].username === currentUser.username) {
+              this.isHost.set(true);
+            } else {
+              this.isHost.set(false);
+            }
           }
         },
       });
@@ -148,14 +159,35 @@ export class Lobby implements OnInit, OnDestroy {
   }
 
   private navigateToGame(): void {
+    this.navigatingToGame = true;
     this.stopIntervals();
     this.router.navigate(['/room', this.roomCode, 'game']);
   }
 
+  leaveRoom(): void {
+    this.roomService.leaveRoom(this.roomCode).subscribe({
+      next: () => this.router.navigate(['/main_menu']),
+      error: () => this.router.navigate(['/main_menu'])
+    });
+  }
+
   // Custom room: host starts manually
   startGame() {
+    if (this.players().length < 3) {
+      alert('Se necesitan al menos 3 jugadores para iniciar la partida.');
+      return;
+    }
     if (this.isHost()) {
-      this.wsService.send(`/app/room.${this.roomCode}.start`, {});
+      // It looks like backend expects POST /api/rooms/{code}/start for starting
+      this.http.post(`/api/rooms/${this.roomCode}/start`, {}).subscribe({
+        next: () => {
+          this.wsService.send(`/app/room.${this.roomCode}.start`, {});
+        },
+        error: (err) => {
+          console.error("Error al iniciar la sala", err);
+          this.wsService.send(`/app/room.${this.roomCode}.start`, {}); // Fallback
+        }
+      });
     }
   }
 
@@ -179,5 +211,10 @@ export class Lobby implements OnInit, OnDestroy {
     this.stopIntervals();
     if (this.wsSubscription) this.wsSubscription.unsubscribe();
     if (this.gameStartSub) this.gameStartSub.unsubscribe();
+
+    // Notify the backend that the user left if they are not transitioning to the game
+    if (!this.navigatingToGame) {
+      this.roomService.leaveRoom(this.roomCode).subscribe();
+    }
   }
 }

@@ -1,6 +1,5 @@
-import { Component, inject, computed, Signal } from '@angular/core';
-import { UserService } from '../../../../core/services/user.service';
-import { User } from '../../../../core/models/user.model';
+import { Component, inject } from '@angular/core';
+import { AuthService } from '../../../../core/services/auth.service';
 
 /**
  * WelcomeBannerComponent — Responsabilidad Única (SRP):
@@ -17,7 +16,7 @@ import { User } from '../../../../core/models/user.model';
       <div class="banner-emblem" aria-hidden="true">🎨</div>
       <h1 class="welcome-title">
         Bienvenido,
-        <span class="player-name">{{ playerName() }}</span>
+        <span class="player-name">{{ playerName }}</span>
       </h1>
       <p class="welcome-subtitle">¿Listo para pintar… o engañar?</p>
       <div class="banner-divider" aria-hidden="true"></div>
@@ -26,15 +25,11 @@ import { User } from '../../../../core/models/user.model';
   styleUrl: './welcome-banner.component.css',
 })
 export class WelcomeBannerComponent {
-  private readonly userService = inject(UserService);
+  private readonly authService = inject(AuthService);
 
   /**
-   * Señal computada que deriva el nombre del jugador desde UserService.
-   * Si no hay sesión activa, muestra un texto genérico (Manejo de errores —
-   * ISO 25010, Fiabilidad: tolerancia a estados nulos).
+   * Obtiene el nombre del jugador desde el AuthService.
+   * Si no hay sesión activa, muestra un texto genérico.
    */
-  readonly playerName: Signal<string> = computed(() => {
-    const user: User | null = this.userService.currentUser();
-    return user?.username ?? 'Jugador';
-  });
+  readonly playerName: string = this.authService.getCurrentUser()?.username ?? 'Jugador';
 }

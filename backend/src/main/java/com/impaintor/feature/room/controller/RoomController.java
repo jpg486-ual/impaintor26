@@ -59,7 +59,7 @@ public class RoomController {
 
         Room room = oRoom.get();
 
-        if (room.getPlayersNames().contains(user)) {
+        if (room.getPlayersNames().stream().anyMatch(u -> u.getId().equals(user.getId()))) {
             return ResponseEntity.badRequest().body("El jugador ya está en la sala");
         }
 
@@ -70,7 +70,7 @@ public class RoomController {
         room.getPlayersNames().add(user);
         roomRepository.save(room);
 
-        messagingTemplate.convertAndSend("/topic/room/" + code, room);
+        messagingTemplate.convertAndSend("/topic/room." + code + ".lobby", room);
 
         return ResponseEntity.ok(room);
     }
@@ -85,12 +85,14 @@ public class RoomController {
 
         Room room = oRoom.get();
 
-        if (!room.getPlayersNames().contains(user)) {
+        boolean removed = room.getPlayersNames().removeIf(u -> u.getId().equals(user.getId()));
+        if (!removed) {
             return ResponseEntity.badRequest().body("El jugador no está en la sala");
         }
-
-        room.getPlayersNames().remove(user);
+        
         roomRepository.save(room);
+
+        messagingTemplate.convertAndSend("/topic/room." + code + ".lobby", room);
 
         return ResponseEntity.ok().body("El jugador ha abandonado la partida");
     }

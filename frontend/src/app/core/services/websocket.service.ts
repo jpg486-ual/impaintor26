@@ -1,4 +1,4 @@
-import { Injectable, PLATFORM_ID, inject } from '@angular/core';
+import { Injectable, PLATFORM_ID, inject, NgZone } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Client, IFrame, Message, StompSubscription } from '@stomp/stompjs';
 import { BehaviorSubject, Observable } from 'rxjs';
@@ -38,6 +38,7 @@ interface PendingSubscription {
 @Injectable({ providedIn: 'root' })
 export class WebSocketService {
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly ngZone = inject(NgZone);
 
   private client: Client | null = null;
   private readonly _status$ = new BehaviorSubject<StompStatus>('IDLE');
@@ -112,12 +113,14 @@ export class WebSocketService {
 
       const applyNow = (): StompSubscription => {
         return this.client!.subscribe(topic, (message: Message) => {
-          try {
-            const payload = JSON.parse(message.body) as T;
-            observer.next(payload);
-          } catch (err) {
-            observer.error(err);
-          }
+          this.ngZone.run(() => {
+            try {
+              const payload = JSON.parse(message.body) as T;
+              observer.next(payload);
+            } catch (err) {
+              observer.error(err);
+            }
+          });
         });
       };
 
