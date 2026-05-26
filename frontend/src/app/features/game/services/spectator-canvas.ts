@@ -35,7 +35,7 @@ export class SpectatorCanvasService {
     // Reset automático al inicio de partida o ronda nueva.
     this.gameState.gameEvents$.subscribe((ev) => {
       if (ev.type === 'GAME_START' || ev.type === 'NEW_ROUND') {
-        this.resetAll();
+        this.reset();
       }
     });
   }
@@ -94,7 +94,7 @@ export class SpectatorCanvasService {
   }
 
   /** Resetea todos los canvases (snapshots → {}). */
-  private resetAll(): void {
+  reset(): void {
     this.canvases.clear();
     this._snapshots.set({});
   }

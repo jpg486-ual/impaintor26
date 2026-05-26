@@ -94,11 +94,19 @@ export class WebSocketService {
   /** Desconecta limpiamente. No-op si no está conectado. */
   disconnect(): void {
     if (!this.client) return;
-    if (this.client.active) {
-      this.client.deactivate();
-    }
-    this._status$.next('DISCONNECTED');
+    const old = this.client;
+    // Null out first so a subsequent connect() can create a fresh client immediately,
+    // without waiting for the async deactivate() to complete.
+    this.client = null;
     this.pendingSubs = [];
+    this._status$.next('DISCONNECTED');
+    if (old.active) {
+      // Neuter callbacks so the dying connection doesn't overwrite the new client's state.
+      old.onConnect = () => {};
+      old.onWebSocketClose = () => {};
+      old.onStompError = () => {};
+      old.deactivate();
+    }
   }
 
   /**

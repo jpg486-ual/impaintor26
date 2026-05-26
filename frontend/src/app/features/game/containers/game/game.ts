@@ -170,6 +170,7 @@ export class GameComponent implements OnInit, OnDestroy {
     if (this.connectedToWs) {
       this.ws.disconnect();
     }
+    this.spectator.reset();
     this.gameState.reset();
   }
 
