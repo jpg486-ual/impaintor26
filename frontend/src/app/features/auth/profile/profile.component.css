@@ -300,6 +300,69 @@ input::-webkit-credentials-auto-fill-button {
   flex-direction: column;
 }
 
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.history-item {
+  padding: 0.6rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.history-item__main {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.history-item__meta {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 0.35rem;
+  color: #c4ac87;
+  font-size: 0.95rem;
+}
+
+
+.leaderboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.leaderboard-item {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.leaderboard-rank {
+  width: 2rem;
+  color: #d8bc8d;
+}
+
+.leaderboard-username {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+
+.leaderboard-elo {
+  color: #c4ac87;
+}
+
 .empty-state {
   margin-top: auto;
   padding: 1rem;

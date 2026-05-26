@@ -189,18 +189,48 @@
   <section class="profile-panels" aria-label="Historial y clasificación">
     <article class="panel history-panel">
       <h2>Historial de partidas</h2>
-      <div class="empty-state">
-        <p class="empty-state__title">Todavía no hay partidas registradas.</p>
-        <p class="empty-state__text">Cuando existan partidas, aquí aparecerán la fecha, el rol, el resultado y el cambio de ELO.</p>
-      </div>
+      <ng-container *ngIf="historialPartidas().length > 0; else emptyHistory">
+        <ul class="history-list">
+          <li class="history-item" *ngFor="let partida of historialPartidas()">
+            <div class="history-item__main">
+              <strong>{{ formatDate(partida.playedAt) }}</strong>
+              <span>{{ formatRole(partida.role) }}</span>
+              <span>{{ partida.winner ? 'W' : 'L' }}</span>
+            </div>
+            <div class="history-item__meta">
+              <span>ELO {{ formatEloChange(partida.eloChange) }}</span>
+              <span>Sala {{ partida.roomCode }}</span>
+            </div>
+          </li>
+        </ul>
+      </ng-container>
+
+      <ng-template #emptyHistory>
+        <div class="empty-state">
+          <p class="empty-state__title">Todavía no hay partidas registradas.</p>
+          <p class="empty-state__text">Cuando existan partidas, aquí aparecerán la fecha, el rol, el resultado y el cambio de ELO.</p>
+        </div>
+      </ng-template>
     </article>
 
     <article class="panel leaderboard-panel">
       <h2>Clasificación</h2>
-      <div class="empty-state">
-        <p class="empty-state__title">Aún no hay clasificación disponible.</p>
-        <p class="empty-state__text">Esta zona mostrará el top de jugadores por ELO cuando existan registros.</p>
-      </div>
+      <ng-container *ngIf="leaderboardEntries().length > 0; else emptyLeaderboard">
+        <ul class="leaderboard-list">
+          <li class="leaderboard-item" *ngFor="let user of leaderboardEntries(); let i = index">
+            <span class="leaderboard-rank">#{{ i + 1 }}</span>
+            <span class="leaderboard-username">{{ user.username }}</span>
+            <span class="leaderboard-elo">ELO {{ user.elo }}</span>
+          </li>
+        </ul>
+      </ng-container>
+
+      <ng-template #emptyLeaderboard>
+        <div class="empty-state">
+          <p class="empty-state__title">Aún no hay clasificación disponible.</p>
+          <p class="empty-state__text">Esta zona mostrará el top de jugadores por ELO cuando existan registros.</p>
+        </div>
+      </ng-template>
     </article>
   </section>
 </div>

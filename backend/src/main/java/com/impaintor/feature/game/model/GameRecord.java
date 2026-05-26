@@ -42,6 +42,8 @@ public class GameRecord {
 
     private String secretWord;
 
+    private Integer rounds;
+
     @Enumerated(EnumType.STRING)
     private Room.WinningSide winningSide;
 

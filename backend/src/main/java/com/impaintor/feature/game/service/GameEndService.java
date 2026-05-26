@@ -53,6 +53,7 @@ public class GameEndService {
                 .roomCode(roomCode)
                 .mode(room.getMode())
                 .secretWord(gameState.getSecretWord())
+                .rounds(gameState.getRound())
                 .winningSide(winningSide)
                 .endCondition(endCondition)
                 .playedAt(LocalDateTime.now())
