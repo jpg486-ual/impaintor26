@@ -67,6 +67,11 @@ public class User {
     @Column(length = 500)
     private String biography;
 
+    @Column(length = 64)
+    private String passwordResetTokenHash;
+
+    private LocalDateTime passwordResetTokenExpiresAt;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {

@@ -3,6 +3,7 @@ import { HomeLandingComponent } from './features/auth/home-landing/home-landing.
 import { LoginComponent } from './features/auth/login.component';
 import { RegisterComponent } from './features/auth/register.component';
 import { ForgotPasswordComponent } from './features/auth/forgot-password/forgot-password.component';
+import { ResetPasswordComponent } from './features/auth/reset-password/reset-password.component';
 import { HomeComponent } from './features/home/home.component';
 import { ProfileComponent } from './features/auth/profile/profile.component';
 
@@ -18,6 +19,7 @@ export const routes: Routes = [
   { path: 'profile', component: ProfileComponent },
   { path: 'profile/:id', component: ProfileComponent },
   { path: 'forgot-password', component: ForgotPasswordComponent },
+  { path: 'reset-password', component: ResetPasswordComponent },
   
   // Game & Room Routes
   { path: 'room/create', component: CreateRoomComponent },

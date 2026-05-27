@@ -1,9 +1,12 @@
 package com.impaintor.feature.auth.controller;
 
 import com.impaintor.feature.auth.dto.AuthResponse;
+import com.impaintor.feature.auth.dto.ForgotPasswordRequest;
 import com.impaintor.feature.auth.dto.LoginRequest;
 import com.impaintor.feature.auth.dto.RegisterRequest;
+import com.impaintor.feature.auth.dto.ResetPasswordRequest;
 import com.impaintor.feature.auth.service.AuthService;
+import com.impaintor.feature.auth.service.PasswordResetService;
 import com.impaintor.feature.user.dto.UserPublicResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -30,5 +34,17 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/forgot-password")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestPasswordReset(request.email());
+    }
+
+    @PostMapping("/reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request.token(), request.newPassword());
     }
 }

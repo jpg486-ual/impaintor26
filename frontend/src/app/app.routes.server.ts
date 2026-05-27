@@ -22,6 +22,10 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Prerender
   },
   {
+    path: 'reset-password',
+    renderMode: RenderMode.Prerender
+  },
+  {
     // Rutas dinámicas (room/:code/lobby, etc.) → renderizado en cliente
     path: '**',
     renderMode: RenderMode.Client

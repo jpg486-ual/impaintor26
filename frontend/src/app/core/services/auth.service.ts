@@ -6,6 +6,8 @@ import { throwError } from 'rxjs';
 import {
   LoginRequest,
   RegisterRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
   AuthResponse,
   User,
   AuthState,
@@ -177,6 +179,20 @@ export class AuthService {
         return throwError(() => error);
       })
     );
+  }
+
+  /**
+   * Solicitar restablecimiento de contrasena
+   */
+  requestPasswordReset(request: ForgotPasswordRequest): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/forgot-password`, request);
+  }
+
+  /**
+   * Restablecer contrasena con token
+   */
+  resetPassword(request: ResetPasswordRequest): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/reset-password`, request);
   }
 
   /**

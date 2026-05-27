@@ -3,6 +3,17 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:impaintor;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}
     username: ${SPRING_DATASOURCE_USERNAME:sa}
     password: ${SPRING_DATASOURCE_PASSWORD:}
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS:true}
   jpa:
     hibernate:
       ddl-auto: update
@@ -26,6 +37,11 @@ jwt:
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}   # 24h por defecto
 
 impaintor:
+  mail:
+    from: ${SMTP_FROM:}
+  reset:
+    base-url: ${PASSWORD_RESET_BASE_URL:http://localhost:4200/reset-password}
+    token-ttl-minutes: ${PASSWORD_RESET_TTL_MINUTES:30}
   realtime:
     broker:
       mode: ${REALTIME_BROKER_MODE:simple}        # relay | simple
