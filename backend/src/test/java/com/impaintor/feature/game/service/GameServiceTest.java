@@ -23,7 +23,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.impaintor.feature.game.model.GameState;
 import com.impaintor.feature.game.model.GalleryPhaseEvent;
-import com.impaintor.feature.game.service.GameEndService;
 import com.impaintor.feature.realtime.dto.outbound.RoleAssignment;
 import com.impaintor.feature.realtime.service.RealtimePublisher;
 import com.impaintor.feature.room.models.Room;
