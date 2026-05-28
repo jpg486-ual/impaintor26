@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * Valida el JWT en el frame STOMP CONNECT y ata un {@link StompPrincipal} a la sesión.
  * Los frames posteriores (SEND/SUBSCRIBE/...) no se revalidan: la autenticación
- * persiste mientras dure la sesión WebSocket .
+ * persiste mientras dure la sesión WebSocket.
  */
 @Component
 public class JwtChannelInterceptor implements ChannelInterceptor {
