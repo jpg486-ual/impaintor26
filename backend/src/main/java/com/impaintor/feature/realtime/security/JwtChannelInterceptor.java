@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Valida el JWT en el frame STOMP CONNECT y ata un {@link StompPrincipal} a la sesión.
- * Los frames posteriores (SEND/SUBSCRIBE/...) no se revalidan: la autenticación
+ * Los frames posteriores (SEND/SUBSCRIBE/....) no se revalidan: la autenticación
  * persiste mientras dure la sesión WebSocket.
  */
 @Component
